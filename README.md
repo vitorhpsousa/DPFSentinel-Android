@@ -7,19 +7,19 @@ optionally, Telegram. No ESP32 needed.
 
 Use the phone **or** the board, not both: a BLE ELM327 accepts one connection at a time.
 
-Only the 2014 Hyundai ix35 1.7 CRDi is verified (same PID table as the firmware, [docs/pids.md](../docs/pids.md)).
-Read-only, not a diagnostic tool: see [docs/disclaimer.md](../docs/disclaimer.md).
+Only the 2014 Hyundai ix35 1.7 CRDi is verified (same PID table as the firmware, [docs/pids.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/pids.md)).
+Read-only, not a diagnostic tool: see [docs/disclaimer.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/disclaimer.md).
 
 ## Get the APK
 
-Every push that touches `android/` builds it on GitHub Actions:
+Every push builds it on GitHub Actions:
 
 1. Open the repo's **Actions** tab → **Android app** → the latest green run.
 2. Download the **dpf-sentinel-apk** artifact (a zip) and unzip it.
 3. Copy `DPF-Sentinel-<version>.apk` to the phone and open it (Android asks once to allow installs from
    Files/Chrome). For the Android Auto screen, install it with KingInstaller instead: see below.
 
-Or build it yourself with Android Studio (open the `android/` folder), or from a terminal with the Android SDK:
+Or build it yourself with Android Studio (open this folder), or from a terminal with the Android SDK:
 
 ```bash
 cd android
@@ -71,7 +71,7 @@ if the car shows "Start logging from the phone app", tap Start on the phone once
 
 ## Telegram
 
-*Settings → Telegram*: paste the bot token and your chat id ([docs/telegram-setup.md](../docs/telegram-setup.md)
+*Settings → Telegram*: paste the bot token and your chat id ([docs/telegram-setup.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/telegram-setup.md)
 explains how to get both), **Save**, then **Send test**. You then get:
 
 - regen started / finished / interrupted, and the health warnings (3 fast regens, oil reminder, slow warm-up),
@@ -93,7 +93,7 @@ firmware's logs and tools.
 
 *Logs* lists the files; **Share** sends one to Drive, email, Telegram, etc. They also sit in
 `Android/data/com.dpfsentinel/files/obd` (visible over USB). The format is the
-firmware's ([docs/log-format.md](../docs/log-format.md)); `unix_time` is always filled because the phone
+firmware's ([docs/log-format.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/log-format.md)); `unix_time` is always filled because the phone
 knows the time, and `millis` counts from the start of the session.
 
 ## Code layout
@@ -101,9 +101,9 @@ knows the time, and `millis` counts from the start of the session.
 ```
 core/   pure Kotlin, a port of the firmware logic: ISO-TP reassembly, PID table + decoders,
         request scheduler, regen watch, health + next-regen estimate, CSV format, message texts.
-        Tested against the firmware's golden vectors (test/test_decode).
+        Tested against the firmware's golden vectors (the firmware repo's test/test_decode).
 app/    Android: BLE link (obd/BleElm.kt), LoggerService (the main loop), Telegram, notifications,
         the phone UI (ui/, Compose) and the Android Auto screen (car/, Car App Library).
 ```
 
-Changes to PIDs or thresholds should be made in both `src/` (firmware) and `android/core/` so the two stay in step.
+Changes to PIDs or thresholds should be made in both the firmware's `src/` ([DPFSentinel-ESP32-S3](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3)) and `core/` here, so the two stay in step.
