@@ -23,6 +23,13 @@ object Pids {
     private fun u32(p: IntArray, i: Int) = (p[i].toLong() shl 24) or u24(p, i + 1)
 
     private fun need(n: Int, f: (IntArray) -> Double): (IntArray) -> Double = { p -> if (p.size < n) Double.NaN else f(p) }
+    private fun exactly(n: Int, f: (IntArray) -> Double): (IntArray) -> Double = { p -> if (p.size != n) Double.NaN else f(p) }
+
+    // 21948001 answers "61 FF" + 10 data bytes, always: 34,695 replies in the raw logs up to
+    // 2026-11-07 were all 12 bytes long with 0xFF second (and 0x00 at [7], 0xFF at [11]). Anything
+    // else that starts 0x61 (a 2103 reply arriving late, say) must not be read as soot.
+    private val P9480 = intArrayOf(0x61, 0xFF)
+    private const val LEN9480 = 12
 
     // Floats in the C++ decoders: round through Float so the numbers match the firmware's CSVs.
     private fun f(v: Double) = v.toFloat().toDouble()
@@ -47,8 +54,8 @@ object Pids {
         PidDef("odometer_mi", "mi", "7E0", "2103", "B", intArrayOf(0x61, 0x03), 1000, need(75) { f(u32(it, 59) * MI_PER_M) }),
         PidDef("dpf_regen_active", "bool", "7E0", "2103", "B", intArrayOf(0x61, 0x03), 1000, need(75) { if (it[71] == 4) 1.0 else 0.0 }),
         PidDef("dpf_regen_burning", "bool", "7E0", "2103", "B", intArrayOf(0x61, 0x03), 1000, need(75) { if (it[19] == 21) 1.0 else 0.0 }),
-        PidDef("dpf_soot_level_g", "g", "7E0", "21948001", "2", intArrayOf(0x61), 2000, need(12) { f(u8(it, 10) * 100.0 / 255.0) }),
-        PidDef("intercooler_temp_c", "C", "7E0", "21948001", "2", intArrayOf(0x61), 2000, need(12) { u8(it, 6) - 50.0 }),
+        PidDef("dpf_soot_level_g", "g", "7E0", "21948001", "2", P9480, 2000, exactly(LEN9480) { f(u8(it, 10) * 100.0 / 255.0) }),
+        PidDef("intercooler_temp_c", "C", "7E0", "21948001", "2", P9480, 2000, exactly(LEN9480) { u8(it, 6) - 50.0 }),
 
         // header 7D4, steering ECU
         PidDef("eps_speed_kmh", "km/h", "7D4", "2101", "3", intArrayOf(0x61, 0x01), 5000, need(13) { u8(it, 5) }),

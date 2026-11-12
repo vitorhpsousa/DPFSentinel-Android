@@ -52,6 +52,60 @@ class LogicTest {
         assertTrue("211B" in elm.sent)
     }
 
+    // An adapter that fumbles one ATSH: answers nothing, though it may have taken the header.
+    private class FlakyHeaderElm(private val failOn: String) : ElmTransport {
+        val sent = mutableListOf<String>()
+        var header = ""       // what the adapter really has set
+        var failed = false
+        val wrongHeader = mutableListOf<String>()
+        override fun send(cmd: String, timeoutMs: Long): String {
+            sent.add(cmd)
+            if (cmd.startsWith("ATSH")) {
+                header = cmd.substring(4)
+                if (header == failOn && !failed) { failed = true; return "" }
+                return "OK"
+            }
+            if (cmd.startsWith("AT")) return "OK"
+            val want = if (cmd.startsWith("01")) "7DF" else if (cmd.startsWith("2101")) "7D4" else "7E0"
+            if (header != want) wrongHeader.add(cmd)
+            return if (cmd.startsWith("010C")) "7E804410C1BC4" else "NO DATA"
+        }
+    }
+
+    @Test fun failedAtshForgetsTheCachedHeader() {
+        val elm = FlakyHeaderElm("7E0")
+        val p = ObdPoller(elm)
+        p.initAdapter(0)
+        var t = 0L
+        repeat(200) { p.step(t, false); t += 50 }
+        assertTrue(elm.failed)
+        // After the fumbled ATSH7E0 the adapter is on 7E0; the next 7DF request must set 7DF again
+        // rather than trust the cache, so nothing ever goes out under the wrong header.
+        assertEquals(emptyList(), elm.wrongHeader)
+        val i = elm.sent.indexOf("ATSH7E0")
+        val next = elm.sent.drop(i + 1).first()
+        assertTrue(next.startsWith("ATSH"), "expected an ATSH right after the failed one, got $next")
+        assertEquals(1777.0, p.assembleRow(t).rpm)
+    }
+
+    @Test fun pollerRefusesA2103ReplyForTheSootRequest() {
+        val elm = object : ElmTransport {
+            override fun send(cmd: String, timeoutMs: Long): String = when {
+                cmd.startsWith("AT") -> "OK"
+                // A late 2103 answer turning up for the soot request.
+                cmd.startsWith("21948001") -> "7E8104B6103FFFFFFFF\r7E82100010001000000\r7E82200001000010010\r7E82300000000000100\r" +
+                    "7E82401000100010001\r7E82500010001000100\r7E82601000100FF0000\r7E8270000000C077B28\r" +
+                    "7E828000049DC0C07C5\r7E82904000100000000\r7E82A010001FFFFFF55"
+                else -> "NO DATA"
+            }
+        }
+        val p = ObdPoller(elm)
+        p.initAdapter(0)
+        repeat(20) { p.step(0, false) }
+        assertTrue(p.assembleRow(0).soot.isNaN())
+        assertTrue(p.assembleRow(0).intercooler.isNaN())
+    }
+
     @Test fun staleValuesExpire() {
         val p = ObdPoller(FakeElm())
         p.initAdapter(0)

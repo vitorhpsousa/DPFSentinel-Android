@@ -4,6 +4,8 @@ package io.github.vitorhpsousa.dpfsentinel.core
 // and spaces off (ATS0): frames separated by '\r', each a 3-char CAN id plus up to 8 data bytes.
 // Only frames from rxId are used. Returns the payload starting at the service id (0x41.. / 0x61..)
 // as unsigned bytes (0..255), or an empty array if the reply is missing, foreign or incomplete.
+// "7F xx 78" (response pending) single frames are skipped: the real answer follows them.
+// Consecutive frames must count 1, 2, .. F, 0, 1 ..; a frame out of turn voids the reply.
 object IsoTp {
     private fun hexVal(c: Char): Int = Character.digit(c, 16)
 
@@ -23,6 +25,7 @@ object IsoTp {
         var gotFirst = false
         var total = 0
         var got = 0
+        var nextSeq = 1
         val out = ArrayList<Int>()
 
         for (line in text.split('\r', '\n')) {
@@ -34,6 +37,7 @@ object IsoTp {
                 if (pci == 0) {
                     val len = b[0] and 0x0F
                     if (len == 0 || b.size < 1 + len) return IntArray(0)
+                    if (len == 3 && b[1] == 0x7F && b[3] == 0x78) continue
                     return b.copyOfRange(1, 1 + minOf(len, cap))
                 }
                 if (pci != 1) continue
@@ -41,6 +45,8 @@ object IsoTp {
                 gotFirst = true
                 for (i in 2 until b.size) { if (out.size < cap) out.add(b[i]); got++ }
             } else if (pci == 2) {
+                if ((b[0] and 0x0F) != nextSeq) return IntArray(0)
+                nextSeq = (nextSeq + 1) and 0x0F
                 for (i in 1 until b.size) { if (out.size < cap) out.add(b[i]); got++ }
             }
             if (gotFirst && got >= total) return out.take(minOf(out.size, total)).toIntArray()
