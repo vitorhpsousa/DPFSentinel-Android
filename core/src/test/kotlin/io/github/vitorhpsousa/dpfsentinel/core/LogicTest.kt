@@ -130,7 +130,8 @@ class LogicTest {
 
     @Test fun fastRegenAlertOncePerEpisode() {
         val h = HealthTracker(zone = ZoneOffset.UTC)
-        for (i in 0 until 3) h.update(row(18.0, 80.0), RegenEvent(RegenEvent.Type.START, ""), i * 1000L, nan)
+        // Three separate cycles, 80 mi apart (same odometer + distance would be one regen retried).
+        for (i in 0 until 3) h.update(row(18.0, 80.0, odo = 50_080.0 + 80.0 * i), RegenEvent(RegenEvent.Type.START, ""), i * 1000L, nan)
         assertEquals(listOf(HealthAlert.FAST_REGENS), h.takeAlerts())
         assertEquals(emptyList(), h.takeAlerts())
     }
