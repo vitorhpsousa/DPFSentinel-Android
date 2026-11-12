@@ -89,12 +89,21 @@ object Replay {
         var flagged = 0
         for (r in s.rows) {
             val row = r.row
-            val ev = watch.update(r.ms, r.wall, row["dpf_regen_active"], row.egt, row.soot, row.sinceRegen, row.diffPressure, row.speed)
+            val ev = watch.update(r.ms, r.wall, row["dpf_regen_active"], row.egt, row.soot, row.sinceRegen, row.diffPressure, row.speed, row.rpm)
             if (idle.update(r.ms, row.rpm, row.speed, row.diffPressure, row.coolant, watch.active || row.regenActive)) flagged++
             if (ev.type != RegenEvent.Type.NONE) events.add(ReplayEvent(r.line, r.ms, ev))
             health.update(row, ev, r.ms, r.wall)
         }
-        return ReplayResult(s, events, watch.active, flagged)
+        val open = watch.active
+        // LoggerService's finally block: close whatever is still open.
+        s.rows.lastOrNull()?.let { last ->
+            val ev = watch.finish(last.ms, last.wall)
+            if (ev.type != RegenEvent.Type.NONE) {
+                events.add(ReplayEvent(last.line, last.ms, ev))
+                health.update(last.row, ev, last.ms, last.wall)
+            }
+        }
+        return ReplayResult(s, events, open, flagged)
     }
 }
 
@@ -180,6 +189,10 @@ class ReplayReport(val results: List<ReplayResult>, val outcomes: List<EpisodeOu
     val silent get() = outcomes.count { it.silent }
     val late get() = outcomes.count { it.late }
     val openAtEnd get() = results.count { it.openAtEnd }
+    /** Sessions that stopped with a regen open and never said how it ended. */
+    val openAndSilent get() = results.count { r ->
+        r.openAtEnd && r.events.lastOrNull { it.type != RegenEvent.Type.TICK }?.type.let { it != RegenEvent.Type.END && it != RegenEvent.Type.INTERRUPTED }
+    }
     val unclassified get() = outcomes.filter { !it.ok }
 
     /** PAUSED messages that promised the regen would carry on, and it did not (next event was not RESUMED). */
@@ -214,7 +227,7 @@ class ReplayReport(val results: List<ReplayResult>, val outcomes: List<EpisodeOu
         sb.appendLine("not completed and no message at all   $silent")
         sb.appendLine("INTERRUPTED later than ${EpisodeOutcome.PROMPT_S} s          $late")
         sb.appendLine("'will carry on' said / wrong          $promises / $wrongPromises")
-        sb.appendLine("sessions ending with a regen open     $openAtEnd")
+        sb.appendLine("sessions ending with a regen open     $openAtEnd (closed by finish(): ${openAtEnd - openAndSilent}, left silent: $openAndSilent)")
         sb.appendLine("regensSinceOil after the replay       $regensSinceOil (history rows $historySize)")
         sb.appendLine("idle-blockage rows flagged            ${results.sumOf { it.idleFlaggedRows }}")
         sb.appendLine("-- per episode: file, rows, truth, soot, events (seconds after the flag dropped) --")
