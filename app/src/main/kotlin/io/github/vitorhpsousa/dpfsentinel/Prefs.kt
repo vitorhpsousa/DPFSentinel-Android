@@ -16,9 +16,15 @@ class Prefs(context: Context) {
         get() = p.getString("adapterName", "") ?: ""
         set(v) = p.edit().putString("adapterName", v).apply()
 
+    /** A different token is a different bot: its updates are numbered separately, so the /status poll starts over. */
     var tgToken: String
         get() = p.getString("tgToken", "") ?: ""
-        set(v) = p.edit().putString("tgToken", v.trim()).apply()
+        set(v) {
+            val t = v.trim()
+            val e = p.edit().putString("tgToken", t)
+            if (t != tgToken) e.putLong("tgOffset", 0)
+            e.apply()
+        }
 
     var tgChatId: String
         get() = p.getString("tgChat", "") ?: ""
