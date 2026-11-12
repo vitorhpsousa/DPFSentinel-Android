@@ -33,11 +33,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
-import io.github.vitorhpsousa.dpfsentinel.DpfApp
 import io.github.vitorhpsousa.dpfsentinel.Prefs
 import io.github.vitorhpsousa.dpfsentinel.SessionFiles
 import io.github.vitorhpsousa.dpfsentinel.Snapshot
@@ -103,11 +101,6 @@ fun LogsTab() {
 fun SettingsTab(s: Snapshot) {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
-    val telegram = (ctx.applicationContext as DpfApp).telegram
-    var token by remember { mutableStateOf(prefs.tgToken) }
-    var chat by remember { mutableStateOf(prefs.tgChatId) }
-    var reportTime by remember { mutableStateOf("%02d:%02d".format(prefs.reportHour, prefs.reportMinute)) }
-    var tgResult by remember { mutableStateOf(telegram.lastResult) }
     var dash by remember { mutableStateOf("") }
     var autoCar by remember { mutableStateOf(prefs.autoStartWithCar) }
     var adapter by remember { mutableStateOf(prefs.adapterName.ifEmpty { prefs.adapterAddress }) }
@@ -115,7 +108,6 @@ fun SettingsTab(s: Snapshot) {
     var logPos by remember { mutableStateOf(prefs.logPosition) }
 
     fun toast(t: String) = Toast.makeText(ctx, t, Toast.LENGTH_LONG).show()
-    fun onMain(f: () -> Unit) = android.os.Handler(android.os.Looper.getMainLooper()).post(f)
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Units", fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -146,36 +138,7 @@ fun SettingsTab(s: Snapshot) {
         )
 
         HorizontalDivider()
-        Text("Telegram", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        Text(
-            "Regen start/finish and health alerts, a daily report with the new logs, and /status replies. " +
-                "Make a bot with @BotFather and get your chat id (docs/telegram-setup.md).",
-            color = Muted, fontSize = 12.sp,
-        )
-        OutlinedTextField(token, { token = it }, label = { Text("Bot token (12345678:AA...)") }, singleLine = true,
-            visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(chat, { chat = it }, label = { Text("Chat id") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-        OutlinedTextField(reportTime, { reportTime = it }, label = { Text("Daily report time (HH:MM)") }, singleLine = true,
-            modifier = Modifier.fillMaxWidth())
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
-                if (token.isNotBlank() && !token.contains(':')) { toast("The token must look like 12345678:AAbb... (bot id, colon, secret)"); return@Button }
-                prefs.tgToken = token
-                prefs.tgChatId = chat
-                val hm = Regex("""^(\d{1,2}):(\d{2})$""").find(reportTime.trim())
-                if (hm != null && hm.groupValues[1].toInt() < 24 && hm.groupValues[2].toInt() < 60) {
-                    prefs.reportHour = hm.groupValues[1].toInt()
-                    prefs.reportMinute = hm.groupValues[2].toInt()
-                }
-                toast("Saved")
-            }) { Text("Save") }
-            OutlinedButton(onClick = { telegram.test { r -> onMain { tgResult = r } } }) { Text("Send test") }
-            OutlinedButton(onClick = {
-                telegram.sendReportNow(Messages.latestLine(s.row, units), if (s.running) s.session else -1) { r -> onMain { tgResult = r } }
-            }) { Text("Report now") }
-        }
-        Text("Last result: $tgResult", color = Muted, fontSize = 12.sp)
+        TelegramCard(s, units)
 
         HorizontalDivider()
         AutoLogCard()
