@@ -237,7 +237,7 @@ class LoggerService : Service() {
                 RegenEvent.Type.INTERRUPTED -> "Filter cleaning cut short"
                 else -> ev.headline
             }
-            alert(title, ev.text, if (ev.type == RegenEvent.Type.START) NOTIF_REGEN_START else NOTIF_REGEN_END)
+            alert(title, ev.text, if (ev.type == RegenEvent.Type.START) NOTIF_REGEN_START else NOTIF_REGEN_END, content = ev.headline)
             telegram.event(ev.text)
         }
 
@@ -424,11 +424,11 @@ class LoggerService : Service() {
 
     // Posted to the phone and, through CarAppExtender, to the Android Auto screen.
     @SuppressLint("MissingPermission")
-    private fun alert(title: String, text: String, id: Int) {
+    private fun alert(title: String, text: String, id: Int, content: String = text.substringAfter('\n', text)) {
         val b = NotificationCompat.Builder(this, DpfApp.CH_ALERTS)
             .setSmallIcon(R.drawable.ic_dot)
             .setContentTitle(title)
-            .setContentText(text.substringAfter('\n', text))
+            .setContentText(content)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
