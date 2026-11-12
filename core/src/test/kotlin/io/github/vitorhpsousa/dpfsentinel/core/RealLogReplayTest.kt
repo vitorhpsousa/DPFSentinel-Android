@@ -27,6 +27,8 @@ class RealLogReplayTest {
         assertEquals(0, report.late)
         assertEquals(0, report.promises)
         assertEquals(0, report.openAndSilent)
+        // Retried attempts are one regen: the oil counter matches the cycles, not the starts.
+        assertEquals(report.truthCycles, report.regensSinceOil)
         assertEquals(report.completed, report.results.sumOf { r -> r.events.count { it.type == RegenEvent.Type.END } })
     }
 }
