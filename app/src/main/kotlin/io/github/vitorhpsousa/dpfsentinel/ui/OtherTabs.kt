@@ -178,6 +178,9 @@ fun SettingsTab(s: Snapshot) {
         Text("Last result: $tgResult", color = Muted, fontSize = 12.sp)
 
         HorizontalDivider()
+        AutoLogCard()
+
+        HorizontalDivider()
         Text("Android Auto", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Start logging when Android Auto opens DPF Sentinel", Modifier.weight(1f))
