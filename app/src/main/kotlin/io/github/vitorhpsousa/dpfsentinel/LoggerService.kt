@@ -41,6 +41,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 class LoggerService : Service() {
     @Volatile private var running = false
     @Volatile private var stopReason = ""
+    // Started by AutoStart (or restarted by Android) rather than by the user: gives up sooner.
+    @Volatile private var autoSession = false
     private var worker: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var prefs: Prefs
@@ -55,25 +57,41 @@ class LoggerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // GPS in the background needs the location type too; Android refuses it when the location
-        // permission is missing or the start came from the background, so fall back to BLE only.
+        // A null intent is Android restarting the service after killing the app: an automatic start.
+        val auto = intent == null || intent.getBooleanExtra(EXTRA_AUTO, false)
+        // GPS needs the location type too. Android only allows it for a start made while the app is
+        // on screen (from the background it throws unless location is "Allow all the time", which
+        // this app never asks for), so automatic and car-screen starts log the car data only.
+        // Opening the app later sends another start, which adds GPS to the running session.
         val ble = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE else 0
         val withGps = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ble or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+        val wantGps = ((!auto && DpfApp.uiVisible) || (running && gpsOn)) && PhoneSensors(this).hasLocationPermission
+        val text = if (running) LiveState.state.value.status else "Starting…"
         try {
-            try {
-                if (!PhoneSensors(this).hasLocationPermission) throw SecurityException("no location permission")
-                ServiceCompat.startForeground(this, NOTIF_LIVE, liveNotification("Starting…"), withGps)
-            } catch (e: Exception) {
-                Log.i(TAG, "logging without background GPS: ${e.message}")
-                ServiceCompat.startForeground(this, NOTIF_LIVE, liveNotification("Starting…"), ble)
+            var gps = false
+            if (wantGps) {
+                try {
+                    gpsOn = true   // read by liveNotification
+                    ServiceCompat.startForeground(this, NOTIF_LIVE, liveNotification(text), withGps)
+                    gps = true
+                } catch (e: Exception) {
+                    Log.i(TAG, "logging without GPS: ${e.message}")
+                }
             }
+            gpsOn = gps
+            if (!gps) ServiceCompat.startForeground(this, NOTIF_LIVE, liveNotification(text), ble)
         } catch (e: Exception) {
             // Missing Bluetooth permission or a background start Android refused.
             Log.w(TAG, "startForeground refused", e)
+            gpsOn = false
+            if (auto) AutoStart.failed(this, "Android refused the foreground service")
             stopSelf()
             return START_NOT_STICKY
         }
+        AutoStart.clearNotification(this)
+        if (!auto) autoSession = false
         if (!running) {
+            autoSession = auto
             running = true
             wakeLock = getSystemService(PowerManager::class.java)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DpfSentinel:logger").apply { acquire(12 * 60 * 60 * 1000L) }
@@ -114,6 +132,7 @@ class LoggerService : Service() {
             if (crashes.size > MAX_CRASHES) {
                 stopReason = "Stopped after repeated errors: tap Start to try again"
                 alert("DPF Sentinel stopped", stopReason, NOTIF_HEALTH - 1)
+                AutoStart.stoppedAbnormally(this)
                 break
             }
             try { Thread.sleep(5000) } catch (e: InterruptedException) { break }
@@ -215,7 +234,7 @@ class LoggerService : Service() {
             val useSaved = saved.isNotEmpty() && (connectFails % 3 != 2 || !screenOn)
             status = if (useSaved) "Connecting to ${prefs.adapterName.ifEmpty { saved }}…" else "Scanning for the OBD adapter…"
             publish(latest)
-            val dev = elm.find(if (useSaved) saved else "")
+            val dev = elm.find(if (useSaved) saved else "", onlyAddress = prefs.assocMac)
             if (dev == null) {
                 connectFails++
                 status = if (saved.isEmpty() && !screenOn) "Turn the phone screen on once so it can find the OBD adapter"
@@ -239,10 +258,12 @@ class LoggerService : Service() {
             publish(null)
             while (running) {
                 var now = ms()
-                // Parked, or walked off with the phone: give up rather than retry all night.
-                // Android Auto's auto-start brings it back next drive.
-                if (now - lastCarMs >= IDLE_STOP_MS) {
-                    stopReason = "Stopped: no data from the car for ${IDLE_STOP_MS / 60_000} min"
+                // Parked, or walked off with the phone: give up rather than retry all night; the
+                // automatic start (adapter in range, car Bluetooth, Android Auto) brings it back
+                // next drive. An automatic start that never reached the car gives up sooner.
+                val idleLimit = if (autoSession && lastCarMs == 0L) AUTO_GIVE_UP_MS else IDLE_STOP_MS
+                if (now - lastCarMs >= idleLimit) {
+                    stopReason = "Stopped: no data from the car for ${idleLimit / 60_000} min"
                     break
                 }
                 if (!elm.connected()) {
@@ -366,6 +387,7 @@ class LoggerService : Service() {
             .setSmallIcon(R.drawable.ic_dot)
             .setContentTitle("DPF Sentinel is logging")
             .setContentText(text)
+            .setSubText(if (gpsOn) "car data + GPS" else "car data only")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openApp())
@@ -414,6 +436,8 @@ class LoggerService : Service() {
         private const val BLANK_ROWS_REINIT = 10
         private const val BLANK_ROWS_RECONNECT = 30
         private const val IDLE_STOP_MS = 10 * 60_000L
+        private const val AUTO_GIVE_UP_MS = 3 * 60_000L
+        private const val EXTRA_AUTO = "auto"
         private const val CRASH_WINDOW_MS = 10 * 60_000L
         private const val MAX_CRASHES = 3
 
@@ -423,9 +447,16 @@ class LoggerService : Service() {
         /** Set by the "Oil changed" button; applied by the logger on its next row. */
         val oilChangeRequested = AtomicBoolean(false)
 
-        /** Throws if Android refuses a foreground-service start (e.g. from the background). */
-        fun start(context: Context) {
-            ContextCompat.startForegroundService(context, Intent(context, LoggerService::class.java))
+        /** Whether the running session has the location service type, i.e. also logs GPS. */
+        @Volatile var gpsOn = false
+            private set
+
+        /**
+         * Throws if Android refuses a foreground-service start (e.g. from the background).
+         * [auto] marks a start nobody tapped (see AutoStart): car data only, and a shorter give-up.
+         */
+        fun start(context: Context, auto: Boolean = false) {
+            ContextCompat.startForegroundService(context, Intent(context, LoggerService::class.java).putExtra(EXTRA_AUTO, auto))
         }
 
         fun stop(context: Context) {
