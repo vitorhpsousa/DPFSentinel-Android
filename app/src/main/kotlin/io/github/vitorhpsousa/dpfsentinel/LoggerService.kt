@@ -230,7 +230,14 @@ class LoggerService : Service() {
             lastEvent = ev.text
             if (!ev.notify) return
             lastAlert = ev.text
-            alert(ev.headline, ev.text, if (ev.type == RegenEvent.Type.START) NOTIF_REGEN_START else NOTIF_REGEN_END)
+            // A short title that fits the notification shade and the car's heads-up; the full advice is the body.
+            val title = when (ev.type) {
+                RegenEvent.Type.START -> "Filter cleaning started"
+                RegenEvent.Type.END -> "Filter cleaning finished"
+                RegenEvent.Type.INTERRUPTED -> "Filter cleaning cut short"
+                else -> ev.headline
+            }
+            alert(title, ev.text, if (ev.type == RegenEvent.Type.START) NOTIF_REGEN_START else NOTIF_REGEN_END)
             telegram.event(ev.text)
         }
 

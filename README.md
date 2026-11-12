@@ -70,8 +70,8 @@ if the car shows "Start logging from the phone app", tap Start on the phone once
 
 ## Telegram
 
-*Settings → Telegram*: paste the bot token and your chat id ([docs/telegram-setup.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/telegram-setup.md)
-explains how to get both), **Save**, then **Send test**. You then get:
+*Settings → Telegram*: create a bot with @BotFather in Telegram, paste its token, send your bot any message, then tap
+**Find my chat** (for a private chat the recipient ID is your own Telegram user ID) and **Send test**. You then get:
 
 - regen started / finished / interrupted, and the health warnings (3 fast regens, oil reminder, slow warm-up),
   queued while the phone is offline;
