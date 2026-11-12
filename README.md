@@ -22,7 +22,6 @@ Every push builds it on GitHub Actions:
 Or build it yourself with Android Studio (open this folder), or from a terminal with the Android SDK:
 
 ```bash
-cd android
 ./gradlew :app:assembleDebug      # -> app/build/outputs/apk/debug/app-debug.apk
 ./gradlew -p core test            # decoding / regen / health tests, no Android SDK needed
 ```
