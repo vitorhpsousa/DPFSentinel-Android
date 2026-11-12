@@ -52,18 +52,15 @@ class LogicTest {
         assertTrue("211B" in elm.sent)
     }
 
-    // An adapter that fumbles one ATSH: answers nothing, though it may have taken the header.
-    private class FlakyHeaderElm(private val failOn: String) : ElmTransport {
-        val sent = mutableListOf<String>()
+    // An adapter that can fumble ATSH7E0: it answers nothing, though it has taken the header.
+    private class FlakyHeaderElm : ElmTransport {
         var header = ""       // what the adapter really has set
-        var failed = false
+        var fumble = false
         val wrongHeader = mutableListOf<String>()
         override fun send(cmd: String, timeoutMs: Long): String {
-            sent.add(cmd)
             if (cmd.startsWith("ATSH")) {
                 header = cmd.substring(4)
-                if (header == failOn && !failed) { failed = true; return "" }
-                return "OK"
+                return if (fumble && header == "7E0") "" else "OK"
             }
             if (cmd.startsWith("AT")) return "OK"
             val want = if (cmd.startsWith("01")) "7DF" else if (cmd.startsWith("2101")) "7D4" else "7E0"
@@ -73,19 +70,20 @@ class LogicTest {
     }
 
     @Test fun failedAtshForgetsTheCachedHeader() {
-        val elm = FlakyHeaderElm("7E0")
+        val elm = FlakyHeaderElm()
         val p = ObdPoller(elm)
         p.initAdapter(0)
-        var t = 0L
-        repeat(200) { p.step(t, false); t += 50 }
-        assertTrue(elm.failed)
-        // After the fumbled ATSH7E0 the adapter is on 7E0; the next 7DF request must set 7DF again
-        // rather than trust the cache, so nothing ever goes out under the wrong header.
+        repeat(20) { p.step(0, false) }             // everything served once; ends on 7D4
+        repeat(20) { p.step(200, false) }           // back on 7DF, cached as such
+        elm.fumble = true
+        repeat(20) { p.step(1000, false) }          // the 7E0 requests come due; their ATSH gets no OK
+        assertEquals("7E0", elm.header)
+        // The adapter is on 7E0 while the last header that was confirmed is 7DF. The next 7DF
+        // request must send ATSH7DF again rather than trust that.
+        repeat(20) { p.step(1250, false) }
         assertEquals(emptyList(), elm.wrongHeader)
-        val i = elm.sent.indexOf("ATSH7E0")
-        val next = elm.sent.drop(i + 1).first()
-        assertTrue(next.startsWith("ATSH"), "expected an ATSH right after the failed one, got $next")
-        assertEquals(1777.0, p.assembleRow(t).rpm)
+        assertEquals("7DF", elm.header)
+        assertEquals(1777.0, p.assembleRow(1250).rpm)
     }
 
     @Test fun pollerRefusesA2103ReplyForTheSootRequest() {
