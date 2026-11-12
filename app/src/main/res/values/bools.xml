@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- PresenceService extends a class that only exists from Android 12. -->
+    <bool name="has_presence_service">false</bool>
+</resources>
