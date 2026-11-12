@@ -65,10 +65,22 @@ class MainActivity : ComponentActivity() {
         if (missing.isEmpty()) startLogger() else { pendingStart = true; askPermissions.launch(missing.toTypedArray()) }
     }
 
+    // A session that started by itself logs the car only (Android gives GPS to a background start
+    // only with "Allow all the time"). Now that the app is on screen, a second start adds GPS.
+    override fun onStart() {
+        super.onStart()
+        if (LiveState.state.value.running && !LoggerService.gpsOn && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            runCatching { LoggerService.start(this) }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Ask up front, so Android Auto can start logging later without the phone in hand.
-        val missing = (requiredPermissions() + optionalPermissions).distinct().filter { !granted(it) }
+        // Ask up front, so logging can start later by itself without the phone in hand, and can
+        // say so when it couldn't.
+        val wanted = (requiredPermissions() + optionalPermissions).distinct().toMutableList()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) wanted += Manifest.permission.POST_NOTIFICATIONS
+        val missing = wanted.filter { !granted(it) }
         if (missing.isNotEmpty()) askPermissions.launch(missing.toTypedArray())
 
         setContent {
