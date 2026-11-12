@@ -15,7 +15,7 @@ data class Snapshot(
     val row: Row? = null,
     val stale: Boolean = true,
     val regenActive: Boolean = false,
-    /** A regen the ECU is holding while the car stands still; it usually resumes on driving off. */
+    /** An open regen that is on hold: the flag is off but it is not yet called finished or cut short. */
     val regenPaused: Boolean = false,
     val regenStartedAtMs: Long = 0,
     val estimate: String = "--",
@@ -30,7 +30,7 @@ data class Snapshot(
     val session: Int = 0,
     val rows: Long = 0,
     val lastEvent: String = "",
-    /** Regen start/finish/interrupted only (not the 30 s "still running" ticks): what the car pops up. */
+    /** Regen start/finish/cut-short only (not on hold, carried on or the 30 s ticks): what the car pops up. */
     val lastAlert: String = "",
     val idleBlockage: Boolean = false,
     val writeError: String = "",

@@ -224,6 +224,16 @@ class LoggerService : Service() {
             )
         }
 
+        // One regen message: every event refreshes the screens; only the ones the driver should be
+        // interrupted with (start / finished / cut short) alert on the phone and car and go to Telegram.
+        fun postRegenEvent(ev: RegenEvent) {
+            lastEvent = ev.text
+            if (!ev.notify) return
+            lastAlert = ev.text
+            alert(ev.headline, ev.text, if (ev.type == RegenEvent.Type.START) NOTIF_REGEN_START else NOTIF_REGEN_END)
+            telegram.event(ev.text)
+        }
+
         fun connectAdapter(): Boolean {
             if (!elm.bluetoothOn) { status = "Bluetooth is off"; return false }
             // A saved adapter is reconnected by address; every third failure scans instead, so a
@@ -304,17 +314,9 @@ class LoggerService : Service() {
                 session.flushRaw()
 
                 val ev = watch.update(now, wall, row["dpf_regen_active"], row.egt, row.soot, row.sinceRegen, row.diffPressure,
-                    if (row.speed.isNaN()) gps.speedKmh else row.speed)
+                    if (row.speed.isNaN()) gps.speedKmh else row.speed, rpm = row.rpm)
                 idleWatch.update(now, row.rpm, row.speed, row.diffPressure, row.coolant, watch.active || row.regenActive)
-                if (ev.type != RegenEvent.Type.NONE) {
-                    lastEvent = ev.text
-                    // Still-running pings update the screens only; start/finish/interrupted alert.
-                    if (ev.type != RegenEvent.Type.TICK) {
-                        lastAlert = ev.text
-                        alert(ev.text.substringBefore('\n'), ev.text, if (ev.type == RegenEvent.Type.START || ev.type == RegenEvent.Type.RESUMED) NOTIF_REGEN_START else NOTIF_REGEN_END)
-                        telegram.event(ev.text)
-                    }
-                }
+                if (ev.type != RegenEvent.Type.NONE) postRegenEvent(ev)
                 if (oilChangeRequested.getAndSet(false) && !row.odometer.isNaN()) health.oilChangeNow(row.odometer)
                 health.update(row, ev, now, wall)
                 for (a in health.takeAlerts()) {
@@ -369,6 +371,19 @@ class LoggerService : Service() {
             Log.e(TAG, "logger loop crashed", e)
             crashed = true
         } finally {
+            // A regen still open when logging stops gets its closing message (finished or cut short).
+            runCatching {
+                val now = ms()
+                val wall = unix()
+                val ev = watch.finish(now, wall)
+                if (ev.type != RegenEvent.Type.NONE) {
+                    postRegenEvent(ev)
+                    health.update(latest ?: Row(), ev, now, wall)
+                    val event = lastEvent
+                    val alerted = lastAlert
+                    LiveState.update { it.copy(regenActive = false, regenPaused = false, regenStartedAtMs = 0, lastEvent = event, lastAlert = alerted) }
+                }
+            }.onFailure { Log.w(TAG, "closing the open regen failed", it) }
             elm.close()
             sensors.stop()
             session.close()
@@ -396,7 +411,7 @@ class LoggerService : Service() {
     @SuppressLint("MissingPermission")
     private fun updateLiveNotification(row: Row, estimate: String) {
         val text = if (row.soot.isNaN()) LiveState.state.value.status
-        else "Soot ${"%.1f".format(row.soot)} g · next regen $estimate" + if (LiveState.state.value.regenActive) " · REGEN RUNNING" else if (LiveState.state.value.regenPaused) " · regen paused" else ""
+        else "Soot ${"%.1f".format(row.soot)} g · next regen $estimate" + if (LiveState.state.value.regenActive) " · " + Messages.REGEN_TICK.trimEnd('.') else if (LiveState.state.value.regenPaused) " · " + Messages.REGEN_PAUSED.trimEnd('.') else ""
         NotificationManagerCompat.from(this).notify(NOTIF_LIVE, liveNotification(text))
     }
 

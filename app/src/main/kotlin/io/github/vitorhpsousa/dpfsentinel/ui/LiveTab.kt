@@ -43,6 +43,7 @@ import io.github.vitorhpsousa.dpfsentinel.LoggerService
 import io.github.vitorhpsousa.dpfsentinel.Prefs
 import io.github.vitorhpsousa.dpfsentinel.Snapshot
 import io.github.vitorhpsousa.dpfsentinel.core.IdleBlockageWatch
+import io.github.vitorhpsousa.dpfsentinel.core.Messages
 import java.util.Locale
 
 val Green = Color(0xFF43A047)
@@ -72,9 +73,9 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
 
         if (s.regenActive) {
             val mins = if (s.regenStartedAtMs > 0) (SystemClock.elapsedRealtime() - s.regenStartedAtMs) / 60000 else 0
-            Banner("REGENERATING · $mins min · EGT ${u.temp(r?.egt ?: nan)}", "Keep driving steadily so it can finish.", Amber)
+            Banner(Messages.REGEN_TICK, Messages.REGEN_START + "\n$mins min so far · EGT ${u.temp(r?.egt ?: nan)}", Amber)
         }
-        if (s.regenPaused) Banner("Regen paused", "The car holds the regen while it stands still. It should carry on once you drive off; a steady drive helps it finish.", Amber)
+        if (s.regenPaused) Banner(Messages.REGEN_PAUSED, "Waiting to see whether it carries on or has finished.", Amber)
         if (s.idleBlockage) Banner("DPF pressure high at idle", "Over ${IdleBlockageWatch.THRESHOLD_HPA.toInt()} hPa for a minute at warm idle, with no regen in the last 10 min. A possible blockage sign (threshold still being checked).", Red)
         if (s.running && s.writeError.isNotEmpty()) {
             Banner("Can't write the log file", "${s.writeError}. Is the phone's storage full? Live values still update.", Red)
