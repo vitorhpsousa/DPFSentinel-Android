@@ -51,7 +51,7 @@
 
         <!-- Android Auto. A DPF monitor fits none of the Play Store car categories, so this is for
              sideloading. Android Auto 17.x lists it only when Google Play is the recorded installer
-             (KingInstaller, see android/README.md) and Unknown sources is on. -->
+             (KingInstaller, see README.md) and Unknown sources is on. -->
         <service
             android:name=".car.DpfCarAppService"
             android:exported="true">
