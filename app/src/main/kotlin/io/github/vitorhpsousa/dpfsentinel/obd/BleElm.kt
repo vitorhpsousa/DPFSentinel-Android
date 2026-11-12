@@ -1,6 +1,7 @@
 package io.github.vitorhpsousa.dpfsentinel.obd
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
@@ -9,6 +10,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -98,25 +100,31 @@ class BleElm(private val context: Context) : ElmTransport {
     }
 
     /**
-     * Finds the adapter: the saved address if there is one, else a scan that takes the strongest
-     * adapter-like name in range (several may be: a Konnwei and an OBDLink).
+     * Finds the adapter: the saved address if there is one (no scan, so it works with the screen
+     * off), else a scan that takes the strongest adapter-like name in range (several may be: a
+     * Konnwei and an OBDLink). That scan is unfiltered, which Android only runs with the screen on.
+     * With [onlyAddress] (the adapter paired for automatic logging) the scan is filtered to that
+     * one adapter instead, so it can't pick up somebody else's, and works with the screen off.
      */
-    fun find(savedAddress: String, scanMs: Long = 8000): BluetoothDevice? {
+    fun find(savedAddress: String, scanMs: Long = 8000, onlyAddress: String = ""): BluetoothDevice? {
         val a = adapter ?: return null
         if (!a.isEnabled) return null
         if (savedAddress.isNotEmpty()) return runCatching { a.getRemoteDevice(savedAddress) }.getOrNull()
         val scanner = a.bluetoothLeScanner ?: return null
         var best: ScanResult? = null
         val lock = Object()
+        val filters = if (BluetoothAdapter.checkBluetoothAddress(onlyAddress)) {
+            listOf(ScanFilter.Builder().setDeviceAddress(onlyAddress).build())
+        } else null
         val cb = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 val nm = result.scanRecord?.deviceName ?: result.device.name
-                if (!looksLikeAdapter(nm)) return
+                if (filters == null && !looksLikeAdapter(nm)) return
                 synchronized(lock) { if (best == null || result.rssi > best!!.rssi) best = result }
             }
         }
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        scanner.startScan(null, settings, cb)
+        scanner.startScan(filters, settings, cb)
         try { Thread.sleep(scanMs) } catch (e: InterruptedException) { Thread.currentThread().interrupt() }
         runCatching { scanner.stopScan(cb) }
         return synchronized(lock) { best?.device }

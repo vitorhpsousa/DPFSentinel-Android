@@ -178,13 +178,16 @@ fun SettingsTab(s: Snapshot) {
         Text("Last result: $tgResult", color = Muted, fontSize = 12.sp)
 
         HorizontalDivider()
+        AutoLogCard()
+
+        HorizontalDivider()
         Text("Android Auto", fontWeight = FontWeight.Bold, fontSize = 20.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Start logging when Android Auto opens DPF Sentinel", Modifier.weight(1f))
             Switch(autoCar, { autoCar = it; prefs.autoStartWithCar = it })
         }
         Text(
-            "Android Auto only lists this app when it is installed with KingInstaller (Google Play as installer) and Unknown sources is on. See android/README.md.",
+            "Android Auto only lists this app when it is installed with KingInstaller (Google Play as installer) and Unknown sources is on. See README.md.",
             color = Muted, fontSize = 12.sp,
         )
 

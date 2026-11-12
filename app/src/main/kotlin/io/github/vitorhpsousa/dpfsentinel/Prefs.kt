@@ -62,9 +62,41 @@ class Prefs(context: Context) {
         get() = p.getBoolean("autoCar", true)
         set(v) = p.edit().putBoolean("autoCar", v).apply()
 
-    /** Write latitude/longitude to the logs (speed, altitude and grade are logged regardless). */
+    /** Master switch for every automatic start (adapter in range, car Bluetooth, Android Auto). */
+    var autoLog: Boolean
+        get() = p.getBoolean("autoLog", true)
+        set(v) = p.edit().putBoolean("autoLog", v).apply()
+
+    /** Companion-device association with the OBD adapter (AutoSetup); -1 / "" when there is none. */
+    var assocId: Int
+        get() = p.getInt("assocId", -1)
+        set(v) = p.edit().putInt("assocId", v).apply()
+
+    var assocMac: String
+        get() = p.getString("assocMac", "") ?: ""
+        set(v) = p.edit().putString("assocMac", v).apply()
+
+    /** The car's own Bluetooth (head unit); connecting to it starts logging. "" = none. */
+    var carBtAddress: String
+        get() = p.getString("carBt", "") ?: ""
+        set(v) = p.edit().putString("carBt", v).apply()
+
+    var carBtName: String
+        get() = p.getString("carBtName", "") ?: ""
+        set(v) = p.edit().putString("carBtName", v).apply()
+
+    /** Last automatic start: wall-clock ms (0 = never) and "ok" or why it failed. */
+    var autoLastTime: Long
+        get() = p.getLong("autoLastTime", 0)
+        set(v) = p.edit().putLong("autoLastTime", v).apply()
+
+    var autoLastResult: String
+        get() = p.getString("autoLastResult", "") ?: ""
+        set(v) = p.edit().putString("autoLastResult", v).apply()
+
+    /** Write latitude/longitude to the logs (speed, altitude and grade are logged regardless). Off unless chosen. */
     var logPosition: Boolean
-        get() = p.getBoolean("logPos", true)
+        get() = p.getBoolean("logPos", false)
         set(v) = p.edit().putBoolean("logPos", v).apply()
 
     /**
