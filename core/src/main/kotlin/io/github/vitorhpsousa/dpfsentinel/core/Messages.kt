@@ -6,6 +6,26 @@ import java.util.Locale
 object Messages {
     const val KOFI_URL = "https://ko-fi.com/vitoi"
 
+    // Regen messages, first line: what the driver should do, in plain words. The numbers follow
+    // on a second line built by RegenWatch (see RegenEvent.headline / detail).
+    const val REGEN_START = "The engine is cleaning its exhaust filter. If you can, keep driving for about 10 more minutes. " +
+        "If you've arrived, it's fine to switch off."
+    const val REGEN_END = "Filter cleaning finished. Nothing to do."
+    const val REGEN_INTERRUPTED = "Filter cleaning was cut short. It will try again on the next drive."
+    const val REGEN_PAUSED = "Filter cleaning is on hold."
+    const val REGEN_RESUMED = "Filter cleaning carried on."
+    const val REGEN_TICK = "Filter cleaning in progress."
+
+    fun regenHeadline(type: RegenEvent.Type): String = when (type) {
+        RegenEvent.Type.START -> REGEN_START
+        RegenEvent.Type.END -> REGEN_END
+        RegenEvent.Type.INTERRUPTED -> REGEN_INTERRUPTED
+        RegenEvent.Type.PAUSED -> REGEN_PAUSED
+        RegenEvent.Type.RESUMED -> REGEN_RESUMED
+        RegenEvent.Type.TICK -> REGEN_TICK
+        RegenEvent.Type.NONE -> ""
+    }
+
     private fun n(v: Double, d: Int) = Units.num(v, d)
 
     fun latestLine(row: Row?, u: Units = Units.UK): String =
