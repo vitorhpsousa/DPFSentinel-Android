@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 // Acceptance test over the real car logs. They are private and live outside the repository, so
 // this skips when the folder is absent (CI, other machines). -Ddpf.logs=/path overrides the folder.
 class RealLogReplayTest {
-    private val root = File(System.getProperty("dpf.logs") ?: "/Users/vitor/Claude/OBD/logs")
+    private val root = System.getProperty("dpf.logs")?.let { File(it) } ?: File(System.getProperty("user.home"), "Claude/OBD/logs")
 
     @Test fun replayRealLogs() {
         assumeTrue(root.isDirectory, "no real logs at $root")
