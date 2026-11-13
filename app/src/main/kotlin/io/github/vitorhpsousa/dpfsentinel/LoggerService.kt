@@ -29,6 +29,7 @@ import io.github.vitorhpsousa.dpfsentinel.core.RegenEvent
 import io.github.vitorhpsousa.dpfsentinel.core.RegenWatch
 import io.github.vitorhpsousa.dpfsentinel.core.Row
 import io.github.vitorhpsousa.dpfsentinel.core.SootZone
+import io.github.vitorhpsousa.dpfsentinel.core.StartNotice
 import io.github.vitorhpsousa.dpfsentinel.obd.BleElm
 import io.github.vitorhpsousa.dpfsentinel.ui.MainActivity
 import java.time.LocalTime
@@ -157,6 +158,7 @@ class LoggerService : Service() {
         val health = HealthTracker(HealthState.decode(prefs.health))
         val zone = SootZone()
         val idleWatch = IdleBlockageWatch()
+        val startNotice = StartNotice()
         val history = ArrayDeque<HistoryPoint>()
         val sensors = PhoneSensors(this).also { it.start() }
         val grade = GradeTracker()
@@ -340,6 +342,19 @@ class LoggerService : Service() {
                 }
 
                 if (row.anyPid()) lastCarMs = now
+                // "Logging has started" on Telegram: once per drive, with the first real readings.
+                if (startNotice.due(now, row.anyPid(), !row.soot.isNaN())) {
+                    val wallMs = System.currentTimeMillis()
+                    if (prefs.tgStartNotice && telegram.enabled && StartNotice.allowed(wallMs, prefs.tgLastStartNotice)) {
+                        prefs.tgLastStartNotice = wallMs
+                        telegram.event(
+                            Messages.loggingStarted(
+                                LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")), session.number, autoSession,
+                                row, Messages.estimate(health.state, prefs.units), prefs.units,
+                            ),
+                        )
+                    }
+                }
                 blankRows = if (row.anyPid()) 0 else blankRows + 1
                 status = when {
                     row.anyPid() -> "Connected to ${elm.name}"

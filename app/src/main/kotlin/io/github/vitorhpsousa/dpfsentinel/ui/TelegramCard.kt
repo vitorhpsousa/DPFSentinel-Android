@@ -8,6 +8,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -15,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +44,7 @@ fun TelegramCard(s: Snapshot, units: Units) {
     var chat by remember { mutableStateOf(prefs.tgChatId) }
     var reportTime by remember { mutableStateOf("%02d:%02d".format(prefs.reportHour, prefs.reportMinute)) }
     var tgResult by remember { mutableStateOf(telegram.lastResult) }
+    var startMsg by remember { mutableStateOf(prefs.tgStartNotice) }
     var found by remember { mutableStateOf("") }
     var choices by remember { mutableStateOf<List<TelegramLogic.ChatCandidate>>(emptyList()) }
 
@@ -72,7 +75,7 @@ fun TelegramCard(s: Snapshot, units: Units) {
 
     Text("Telegram", fontWeight = FontWeight.Bold, fontSize = 20.sp)
     Text(
-        "Regen start/finish and health alerts, a daily report with the new logs, and /status replies. " +
+        "A message when a drive starts being logged, regen start/finish and health alerts, a daily report with the new logs, and /status replies. " +
             "Create a bot with @BotFather in Telegram, paste its token here, send your bot any message, then tap Find my chat.",
         color = Muted, fontSize = 12.sp,
     )
@@ -101,6 +104,11 @@ fun TelegramCard(s: Snapshot, units: Units) {
     }
     OutlinedTextField(reportTime, { reportTime = it }, label = { Text("Daily report time (HH:MM)") }, singleLine = true,
         modifier = Modifier.fillMaxWidth())
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Message me when logging starts", Modifier.weight(1f))
+        Switch(startMsg, { startMsg = it; prefs.tgStartNotice = it })
+    }
+    Text("One message per drive with the first readings, so you can see it is working without opening the app.", color = Muted, fontSize = 12.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = { save() }) { Text("Save") }
         OutlinedButton(onClick = {
