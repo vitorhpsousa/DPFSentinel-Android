@@ -6,6 +6,26 @@ import java.util.Locale
 object Messages {
     const val KOFI_URL = "https://ko-fi.com/vitoi"
 
+    // Regen messages, first line: what the driver should do, in plain words. The numbers follow
+    // on a second line built by RegenWatch (see RegenEvent.headline / detail).
+    const val REGEN_START = "The engine is cleaning its exhaust filter. If you can, keep driving for about 10 more minutes. " +
+        "If you've arrived, it's fine to switch off."
+    const val REGEN_END = "Filter cleaning finished. Nothing to do."
+    const val REGEN_INTERRUPTED = "Filter cleaning was cut short. It will try again on the next drive."
+    const val REGEN_PAUSED = "Filter cleaning is on hold."
+    const val REGEN_RESUMED = "Filter cleaning carried on."
+    const val REGEN_TICK = "Filter cleaning in progress."
+
+    fun regenHeadline(type: RegenEvent.Type): String = when (type) {
+        RegenEvent.Type.START -> REGEN_START
+        RegenEvent.Type.END -> REGEN_END
+        RegenEvent.Type.INTERRUPTED -> REGEN_INTERRUPTED
+        RegenEvent.Type.PAUSED -> REGEN_PAUSED
+        RegenEvent.Type.RESUMED -> REGEN_RESUMED
+        RegenEvent.Type.TICK -> REGEN_TICK
+        RegenEvent.Type.NONE -> ""
+    }
+
     private fun n(v: Double, d: Int) = Units.num(v, d)
 
     fun latestLine(row: Row?, u: Units = Units.UK): String =
@@ -16,6 +36,19 @@ object Messages {
     fun status(time: String, row: Row?, estimate: String, u: Units = Units.UK): String {
         if (row == null || row.soot.isNaN()) return "Status $time: car off or adapter out of range"
         return "Status $time: rpm ${n(row.rpm, 0)}, speed ${u.speed(row.speed)}\n" +
+            "soot ${n(row.soot, 1)} g, ${u.distance(row.sinceRegen, 1)} since regen\n" +
+            "DPF ${n(row.diffPressure, 0)} hPa, EGT ${u.temp(row.egt)}, battery ${n(row.batteryV, 1)} V\n" +
+            "next regen: $estimate"
+    }
+
+    /**
+     * Sent once when a drive starts being logged: proof that it is working, with the first readings.
+     * [auto] = nobody tapped Start (the app woke itself).
+     */
+    fun loggingStarted(time: String, session: Int, auto: Boolean, row: Row?, estimate: String, u: Units = Units.UK): String {
+        val head = "DPF Sentinel is logging, $time (session $session, ${if (auto) "started by itself" else "started by hand"})"
+        if (row == null || row.soot.isNaN()) return "$head\nConnected to the car; no filter reading yet."
+        return "$head\n" +
             "soot ${n(row.soot, 1)} g, ${u.distance(row.sinceRegen, 1)} since regen\n" +
             "DPF ${n(row.diffPressure, 0)} hPa, EGT ${u.temp(row.egt)}, battery ${n(row.batteryV, 1)} V\n" +
             "next regen: $estimate"

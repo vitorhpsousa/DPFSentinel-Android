@@ -21,7 +21,15 @@
     <!-- Telegram alerts and reports -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Automatic logging: Android wakes the app when the paired OBD adapter comes into range
+         (PresenceService) and lets it start the logger from the background; re-armed after a reboot. -->
+    <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+    <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
+    <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.barometer" android:required="false" />
 
@@ -49,9 +57,40 @@
             android:exported="false"
             android:foregroundServiceType="connectedDevice|location" />
 
+        <!-- Bound by Android when the associated OBD adapter is in range (Android 12+). -->
+        <service
+            android:name=".PresenceService"
+            android:enabled="@bool/has_presence_service"
+            android:exported="true"
+            android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+            <intent-filter>
+                <action android:name="android.companion.CompanionDeviceService" />
+            </intent-filter>
+        </service>
+
+        <!-- The phone connected to a Bluetooth device: logging starts if it is the chosen car.
+             Exported because the broadcast comes from the system's Bluetooth app. -->
+        <receiver
+            android:name=".CarBluetoothReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Re-arms the adapter watch after a reboot or an app update. Does not start logging. -->
+        <receiver
+            android:name=".RearmReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
         <!-- Android Auto. A DPF monitor fits none of the Play Store car categories, so this is for
              sideloading. Android Auto 17.x lists it only when Google Play is the recorded installer
-             (KingInstaller, see android/README.md) and Unknown sources is on. -->
+             (KingInstaller, see README.md) and Unknown sources is on. -->
         <service
             android:name=".car.DpfCarAppService"
             android:exported="true">

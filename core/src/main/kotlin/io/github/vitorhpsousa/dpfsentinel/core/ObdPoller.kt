@@ -48,7 +48,12 @@ class ObdPoller(private val elm: ElmTransport, private val raw: (header: String,
 
     private fun setHeader(header: String): Boolean {
         if (currentHeader == header) return true
-        if (!elm.send("ATSH$header").contains("OK")) return false
+        if (!elm.send("ATSH$header").contains("OK")) {
+            // The adapter may or may not have taken it: forget what we think is set, so the next
+            // request sends its ATSH again whichever header it wants.
+            currentHeader = ""
+            return false
+        }
         currentHeader = header
         return true
     }

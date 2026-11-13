@@ -13,8 +13,9 @@ class StandstillTest {
     private class Drive(val w: RegenWatch = RegenWatch(ZoneOffset.UTC)) {
         var t = 0L
         val events = mutableListOf<RegenEvent.Type>()
+        // The engine runs throughout (idling when stopped), as in a queue or at lights.
         fun rows(n: Int, flag: Double, speed: Double, soot: Double = 18.0) = repeat(n) {
-            val ev = w.update(t, Double.NaN, flag, 600.0, soot, 250.0, 30.0, speed)
+            val ev = w.update(t, Double.NaN, flag, 600.0, soot, 250.0, 30.0, speed, rpm = if (speed > 0) 2000.0 else 800.0)
             if (ev.type != RegenEvent.Type.NONE && ev.type != RegenEvent.Type.TICK) events += ev.type
             t += 1000
         }
@@ -23,7 +24,7 @@ class StandstillTest {
     @Test fun driveThroughPausesAndResumes() {
         val d = Drive()
         d.rows(120, 1.0, 60.0)          // regen while driving
-        d.rows(300, 0.0, 0.0)           // 5 min in the drive-through queue, ECU holds the regen
+        d.rows(300, 0.0, 0.0)           // 5 min in the drive-through queue, engine idling, flag off
         assertTrue(d.w.paused)
         d.rows(20, 0.0, 30.0)           // pulls away, flag comes back after 20 s
         d.rows(600, 1.0, 70.0)
@@ -50,11 +51,25 @@ class StandstillTest {
         assertEquals(listOf(RegenEvent.Type.START, RegenEvent.Type.END), d.events)
     }
 
-    @Test fun flagDropWhileDrivingIsStillAFinish() {
+    // Was "flagDropWhileDrivingIsStillAFinish": that rule produced the false "finished" at 18 g in
+    // freenove session_59. With soot left and no distance reset the regen is held, then called off.
+    @Test fun flagDropWhileDrivingWithSootLeftIsNotAFinish() {
         val d = Drive()
         d.rows(60, 1.0, 50.0)
         d.rows(5, 0.0, 50.0, soot = 9.0)
-        assertEquals(listOf(RegenEvent.Type.START, RegenEvent.Type.END), d.events)
+        assertEquals(listOf(RegenEvent.Type.START, RegenEvent.Type.PAUSED), d.events)
+        d.rows(180, 0.0, 50.0, soot = 9.0)
+        assertEquals(listOf(RegenEvent.Type.START, RegenEvent.Type.PAUSED, RegenEvent.Type.INTERRUPTED), d.events)
+    }
+
+    // Callers that do not pass rpm keep the old rule (moving + flag off = finished).
+    @Test fun withoutRpmAFlagDropWhileDrivingIsStillAFinish() {
+        val w = RegenWatch(ZoneOffset.UTC)
+        var t = 0L
+        var last = RegenEvent.NONE
+        repeat(60) { w.update(t, nan, 1.0, 600.0, 18.0, 250.0, 30.0, 50.0); t += 1000 }
+        repeat(3) { last = w.update(t, nan, 0.0, 600.0, 9.0, 250.0, 30.0, 50.0); t += 1000 }
+        assertEquals(RegenEvent.Type.END, last.type)
     }
 
     @Test fun pauseThatNeverResumesTimesOut() {

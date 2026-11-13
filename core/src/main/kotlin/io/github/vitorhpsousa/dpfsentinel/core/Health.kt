@@ -9,12 +9,22 @@ import java.time.temporal.ChronoUnit
 // (guesses lifted from docs/ix35-known-issues.md). Persisted through encode()/decode() so the
 // Android side can keep it in SharedPreferences.
 class HealthState {
+    /**
+     * One regen cycle: every attempt between two distance-since-regen resets is the same regen.
+     * odometerMi / milesSincePrev are from the first attempt; wallClock is the latest attempt's
+     * start, so "today / this week" follow when the regen last ran; interrupted is how the latest
+     * attempt ended (false while it runs and after it completes).
+     */
     class RegenRecord(
         val odometerMi: Double,
         val milesSincePrev: Double,
         var interrupted: Boolean,
-        val wallClock: Double,
-    )
+        var wallClock: Double,
+        var attempts: Int = 1,
+    ) {
+        /** Odometer at the previous completed regen: the same for every attempt of one cycle. */
+        val cycleStartOdoMi get() = odometerMi - milesSincePrev
+    }
 
     val regenHistory = ArrayList<RegenRecord>()   // oldest first, capped at MAX_REGENS
     var regensSinceOil = 0
@@ -40,7 +50,7 @@ class HealthState {
         fun d(v: Double) = v.toString()
         val lines = mutableListOf(
             "ver=$LAYOUT_VERSION",
-            "regens=" + regenHistory.joinToString(";") { "${d(it.odometerMi)},${d(it.milesSincePrev)},${it.interrupted},${d(it.wallClock)}" },
+            "regens=" + regenHistory.joinToString(";") { "${d(it.odometerMi)},${d(it.milesSincePrev)},${it.interrupted},${d(it.wallClock)},${it.attempts}" },
             "sinceOil=$regensSinceOil",
             "oilOdo=${d(oilChangeOdometerMi)}",
             "warmups=" + warmupMinutes.joinToString(";") { d(it) },
@@ -70,7 +80,8 @@ class HealthState {
                 fun list(key: String) = m[key].orEmpty().split(';').filter { it.isNotEmpty() }
                 list("regens").takeLast(MAX_REGENS).forEach {
                     val p = it.split(',')
-                    s.regenHistory.add(RegenRecord(p[0].toDouble(), p[1].toDouble(), p[2].toBoolean(), p[3].toDouble()))
+                    // The 5th field (attempts) was added later: blobs written before it have four.
+                    s.regenHistory.add(RegenRecord(p[0].toDouble(), p[1].toDouble(), p[2].toBoolean(), p[3].toDouble(), p.getOrNull(4)?.toInt() ?: 1))
                 }
                 s.regensSinceOil = m["sinceOil"]?.toInt() ?: 0
                 s.oilChangeOdometerMi = m["oilOdo"]?.toDouble() ?: 0.0
@@ -111,7 +122,10 @@ class HealthTracker(val state: HealthState = HealthState(), private val zone: Zo
     private val pending = LinkedHashSet<HealthAlert>()
 
     private var warming = false
-    private var warmStartMs = 0L
+    private var coolantSeen = false      // the first coolant reading of this session has been looked at
+    private var warmRunMs = 0L           // engine-running time since the cold start
+    private var lastUpdateMs = Long.MIN_VALUE
+    private var lastCoolantMs = 0L
     private var lastDist = Double.NaN
     private var resetRows = 0
     private var behindRows = 0
@@ -199,7 +213,20 @@ class HealthTracker(val state: HealthState = HealthState(), private val zone: Zo
         slowWarmupCond = cond
     }
 
-    /** Call once per assembled row with the RegenEvent that row's RegenWatch.update() returned. */
+    // A START in the cycle the last history row belongs to. The cycle is named by the odometer at
+    // the previous completed regen (odometer - distance since regen), which holds still through
+    // key-offs and across sessions; without an odometer, by the persisted cycleHadStart flag.
+    private fun isRetry(last: HealthState.RegenRecord, row: Row): Boolean {
+        val now = row.odometer - row.sinceRegen
+        val then = last.cycleStartOdoMi
+        return if (now.isNaN() || then.isNaN()) h.cycleHadStart else kotlin.math.abs(now - then) < SAME_CYCLE_MI
+    }
+
+    /**
+     * Call once per assembled row with the RegenEvent that row's RegenWatch.update() returned, and
+     * once more with the event from RegenWatch.finish() (any row, the last one will do) if it is
+     * not NONE.
+     */
     fun update(row: Row, event: RegenEvent, nowMs: Long, wallClock: Double) {
         var changed = false
         if (!row.batteryV.isNaN()) h.lastBatteryV = row.batteryV
@@ -234,21 +261,30 @@ class HealthTracker(val state: HealthState = HealthState(), private val zone: Zo
         }
 
         if (event.type == RegenEvent.Type.START) {
-            // Only the first start of a cycle teaches the trigger and the rate; later ones are retries.
-            if (!h.cycleHadStart) {
+            val last = h.regenHistory.lastOrNull()
+            if (last != null && isRetry(last, row)) {
+                // Another attempt at the regen that was cut short: the same regen, not a new one.
+                last.attempts++
+                last.interrupted = false
+                if (!wallClock.isNaN()) last.wallClock = wallClock
+            } else {
+                // Only the first start of a cycle teaches the trigger and the rate, counts towards the
+                // oil reminder and makes a history row.
                 val r = liveRate(soot, dist)
                 if (!r.isNaN()) h.lastRateGPerMi = r
                 if (!soot.isNaN()) {
                     h.triggerHist.add(soot)
                     while (h.triggerHist.size > HealthState.MAX_TRIGGERS) h.triggerHist.removeAt(0)
                 }
+                h.regenHistory.add(HealthState.RegenRecord(row.odometer, row.sinceRegen, false, wallClock))
+                while (h.regenHistory.size > HealthState.MAX_REGENS) h.regenHistory.removeAt(0)
+                h.regensSinceOil++
+                evalFastRegen()
             }
             h.cycleHadStart = true
-            h.regenHistory.add(HealthState.RegenRecord(row.odometer, row.sinceRegen, false, wallClock))
-            while (h.regenHistory.size > HealthState.MAX_REGENS) h.regenHistory.removeAt(0)
-            h.regensSinceOil++
             changed = true
-            evalFastRegen()
+        } else if (event.type == RegenEvent.Type.END) {
+            h.regenHistory.lastOrNull()?.let { if (it.interrupted) { it.interrupted = false; changed = true } }
         } else if (event.type == RegenEvent.Type.INTERRUPTED) {
             h.regenHistory.lastOrNull()?.let { if (!it.interrupted) { it.interrupted = true; changed = true } }
             // An aborted burn drops soot without resetting distance: measure on from here.
@@ -259,13 +295,26 @@ class HealthTracker(val state: HealthState = HealthState(), private val zone: Zo
             }
         }
 
+        // Warm-up time = engine-running time from a cold start to WARMUP_DONE_C. Only a session whose
+        // first coolant reading is cold is timed; time with the engine off is not counted; a hole in
+        // the data throws the sample away rather than guess.
+        val dtMs = if (lastUpdateMs == Long.MIN_VALUE) 0L else nowMs - lastUpdateMs
+        lastUpdateMs = nowMs
+        if (warming) {
+            if (dtMs > WARMUP_GAP_MS || nowMs - lastCoolantMs > WARMUP_GAP_MS) warming = false
+            else if (!row.rpm.isNaN() && row.rpm >= WARMUP_RUNNING_RPM) warmRunMs += dtMs.coerceAtLeast(0)
+        }
         val coolant = row.coolant
         if (!coolant.isNaN()) {
-            if (!warming && coolant < WARMUP_COLD_C) {
-                warming = true
-                warmStartMs = nowMs
+            lastCoolantMs = nowMs
+            if (!coolantSeen) {
+                coolantSeen = true
+                if (coolant < WARMUP_COLD_C) {
+                    warming = true
+                    warmRunMs = 0
+                }
             } else if (warming && coolant >= WARMUP_DONE_C) {
-                val mins = (nowMs - warmStartMs) / 60000.0
+                val mins = warmRunMs / 60000.0
                 h.warmupMinutes.add(mins)
                 while (h.warmupMinutes.size > HealthState.MAX_WARMUPS) h.warmupMinutes.removeAt(0)
                 h.lastWarmupMinutes = mins
@@ -287,6 +336,9 @@ class HealthTracker(val state: HealthState = HealthState(), private val zone: Zo
         const val SLOW_WARMUP_MIN_SAMPLES = 3
         const val WARMUP_COLD_C = 40.0
         const val WARMUP_DONE_C = 80.0
+        const val WARMUP_RUNNING_RPM = 500.0    // warm-up time only accumulates at or above this
+        const val WARMUP_GAP_MS = 120_000L      // rows or coolant missing this long: the sample is dropped
+        const val SAME_CYCLE_MI = 2.0           // attempts whose cycle-start odometers differ by less are one regen
 
         // Regens on this car have started at 17.65-19.61 g; the lowest is the default so the estimate errs "sooner".
         const val DEFAULT_TRIGGER_G = 17.65
