@@ -22,7 +22,6 @@ Every push builds it on GitHub Actions:
 Or build it yourself with Android Studio (open this folder), or from a terminal with the Android SDK:
 
 ```bash
-cd android
 ./gradlew :app:assembleDebug      # -> app/build/outputs/apk/debug/app-debug.apk
 ./gradlew -p core test            # decoding / regen / health tests, no Android SDK needed
 ```
@@ -71,9 +70,11 @@ if the car shows "Start logging from the phone app", tap Start on the phone once
 
 ## Telegram
 
-*Settings → Telegram*: paste the bot token and your chat id ([docs/telegram-setup.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/telegram-setup.md)
-explains how to get both), **Save**, then **Send test**. You then get:
+*Settings → Telegram*: create a bot with @BotFather in Telegram, paste its token, send your bot any message, then tap
+**Find my chat** (for a private chat the recipient ID is your own Telegram user ID) and **Send test**. You then get:
 
+- one message when a drive starts being logged, with the first readings (switch: *Message me when logging starts*;
+  not repeated within 10 minutes);
 - regen started / finished / interrupted, and the health warnings (3 fast regens, oil reminder, slow warm-up),
   queued while the phone is offline;
 - a daily report after the set time (17:30 by default) with the newest session logs not sent yet

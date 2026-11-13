@@ -5,4 +5,10 @@ local.properties
 *.iml
 .kotlin/
 captures/
-android/app/*.keystore
+*.keystore
+*.jks
+*.p12
+*.pem
+*signing-secrets*
+*.aab
+*.apk

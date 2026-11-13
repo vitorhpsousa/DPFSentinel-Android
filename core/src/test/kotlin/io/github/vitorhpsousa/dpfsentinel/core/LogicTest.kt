@@ -52,6 +52,58 @@ class LogicTest {
         assertTrue("211B" in elm.sent)
     }
 
+    // An adapter that can fumble ATSH7E0: it answers nothing, though it has taken the header.
+    private class FlakyHeaderElm : ElmTransport {
+        var header = ""       // what the adapter really has set
+        var fumble = false
+        val wrongHeader = mutableListOf<String>()
+        override fun send(cmd: String, timeoutMs: Long): String {
+            if (cmd.startsWith("ATSH")) {
+                header = cmd.substring(4)
+                return if (fumble && header == "7E0") "" else "OK"
+            }
+            if (cmd.startsWith("AT")) return "OK"
+            val want = if (cmd.startsWith("01")) "7DF" else if (cmd.startsWith("2101")) "7D4" else "7E0"
+            if (header != want) wrongHeader.add(cmd)
+            return if (cmd.startsWith("010C")) "7E804410C1BC4" else "NO DATA"
+        }
+    }
+
+    @Test fun failedAtshForgetsTheCachedHeader() {
+        val elm = FlakyHeaderElm()
+        val p = ObdPoller(elm)
+        p.initAdapter(0)
+        repeat(20) { p.step(0, false) }             // everything served once; ends on 7D4
+        repeat(20) { p.step(200, false) }           // back on 7DF, cached as such
+        elm.fumble = true
+        repeat(20) { p.step(1000, false) }          // the 7E0 requests come due; their ATSH gets no OK
+        assertEquals("7E0", elm.header)
+        // The adapter is on 7E0 while the last header that was confirmed is 7DF. The next 7DF
+        // request must send ATSH7DF again rather than trust that.
+        repeat(20) { p.step(1250, false) }
+        assertEquals(emptyList(), elm.wrongHeader)
+        assertEquals("7DF", elm.header)
+        assertEquals(1777.0, p.assembleRow(1250).rpm)
+    }
+
+    @Test fun pollerRefusesA2103ReplyForTheSootRequest() {
+        val elm = object : ElmTransport {
+            override fun send(cmd: String, timeoutMs: Long): String = when {
+                cmd.startsWith("AT") -> "OK"
+                // A late 2103 answer turning up for the soot request.
+                cmd.startsWith("21948001") -> "7E8104B6103FFFFFFFF\r7E82100010001000000\r7E82200001000010010\r7E82300000000000100\r" +
+                    "7E82401000100010001\r7E82500010001000100\r7E82601000100FF0000\r7E8270000000C077B28\r" +
+                    "7E828000049DC0C07C5\r7E82904000100000000\r7E82A010001FFFFFF55"
+                else -> "NO DATA"
+            }
+        }
+        val p = ObdPoller(elm)
+        p.initAdapter(0)
+        repeat(20) { p.step(0, false) }
+        assertTrue(p.assembleRow(0).soot.isNaN())
+        assertTrue(p.assembleRow(0).intercooler.isNaN())
+    }
+
     @Test fun staleValuesExpire() {
         val p = ObdPoller(FakeElm())
         p.initAdapter(0)
@@ -67,7 +119,8 @@ class LogicTest {
         assertEquals(RegenEvent.Type.NONE, step(1.0).type)
         val start = step(1.0)
         assertEquals(RegenEvent.Type.START, start.type)
-        assertTrue(start.text.startsWith("DPF regeneration started\nsoot 18.0 g, 250.0 mi"))
+        assertEquals(Messages.REGEN_START, start.headline)
+        assertTrue(start.detail.startsWith("soot 18.0 g, 250.0 mi"))
         assertTrue("DPF pressure 30 hPa" in start.text)
         step(0.0); step(0.0)
         assertEquals(RegenEvent.Type.END, step(0.0).type)
@@ -129,7 +182,8 @@ class LogicTest {
 
     @Test fun fastRegenAlertOncePerEpisode() {
         val h = HealthTracker(zone = ZoneOffset.UTC)
-        for (i in 0 until 3) h.update(row(18.0, 80.0), RegenEvent(RegenEvent.Type.START, ""), i * 1000L, nan)
+        // Three separate cycles, 80 mi apart (same odometer + distance would be one regen retried).
+        for (i in 0 until 3) h.update(row(18.0, 80.0, odo = 50_080.0 + 80.0 * i), RegenEvent(RegenEvent.Type.START, ""), i * 1000L, nan)
         assertEquals(listOf(HealthAlert.FAST_REGENS), h.takeAlerts())
         assertEquals(emptyList(), h.takeAlerts())
     }

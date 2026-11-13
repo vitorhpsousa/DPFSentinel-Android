@@ -16,9 +16,15 @@ class Prefs(context: Context) {
         get() = p.getString("adapterName", "") ?: ""
         set(v) = p.edit().putString("adapterName", v).apply()
 
+    /** A different token is a different bot: its updates are numbered separately, so the /status poll starts over. */
     var tgToken: String
         get() = p.getString("tgToken", "") ?: ""
-        set(v) = p.edit().putString("tgToken", v.trim()).apply()
+        set(v) {
+            val t = v.trim()
+            val e = p.edit().putString("tgToken", t)
+            if (t != tgToken) e.putLong("tgOffset", 0)
+            e.apply()
+        }
 
     var tgChatId: String
         get() = p.getString("tgChat", "") ?: ""
@@ -43,6 +49,16 @@ class Prefs(context: Context) {
         get() = p.getInt("tgBoot", 0)
         set(v) = p.edit().putInt("tgBoot", v).apply()
 
+    /** Send a Telegram message when a drive starts being logged (on unless switched off). */
+    var tgStartNotice: Boolean
+        get() = p.getBoolean("tgStartMsg", true)
+        set(v) = p.edit().putBoolean("tgStartMsg", v).apply()
+
+    /** Wall-clock ms of the last "logging started" message, so a quick restart doesn't repeat it. */
+    var tgLastStartNotice: Long
+        get() = p.getLong("tgStartMsgAt", 0)
+        set(v) = p.edit().putLong("tgStartMsgAt", v).apply()
+
     var tgUpdateOffset: Long
         get() = p.getLong("tgOffset", 0)
         set(v) = p.edit().putLong("tgOffset", v).apply()
@@ -62,9 +78,41 @@ class Prefs(context: Context) {
         get() = p.getBoolean("autoCar", true)
         set(v) = p.edit().putBoolean("autoCar", v).apply()
 
-    /** Write latitude/longitude to the logs (speed, altitude and grade are logged regardless). */
+    /** Master switch for every automatic start (adapter in range, car Bluetooth, Android Auto). */
+    var autoLog: Boolean
+        get() = p.getBoolean("autoLog", true)
+        set(v) = p.edit().putBoolean("autoLog", v).apply()
+
+    /** Companion-device association with the OBD adapter (AutoSetup); -1 / "" when there is none. */
+    var assocId: Int
+        get() = p.getInt("assocId", -1)
+        set(v) = p.edit().putInt("assocId", v).apply()
+
+    var assocMac: String
+        get() = p.getString("assocMac", "") ?: ""
+        set(v) = p.edit().putString("assocMac", v).apply()
+
+    /** The car's own Bluetooth (head unit); connecting to it starts logging. "" = none. */
+    var carBtAddress: String
+        get() = p.getString("carBt", "") ?: ""
+        set(v) = p.edit().putString("carBt", v).apply()
+
+    var carBtName: String
+        get() = p.getString("carBtName", "") ?: ""
+        set(v) = p.edit().putString("carBtName", v).apply()
+
+    /** Last automatic start: wall-clock ms (0 = never) and "ok" or why it failed. */
+    var autoLastTime: Long
+        get() = p.getLong("autoLastTime", 0)
+        set(v) = p.edit().putLong("autoLastTime", v).apply()
+
+    var autoLastResult: String
+        get() = p.getString("autoLastResult", "") ?: ""
+        set(v) = p.edit().putString("autoLastResult", v).apply()
+
+    /** Write latitude/longitude to the logs (speed, altitude and grade are logged regardless). Off unless chosen. */
     var logPosition: Boolean
-        get() = p.getBoolean("logPos", true)
+        get() = p.getBoolean("logPos", false)
         set(v) = p.edit().putBoolean("logPos", v).apply()
 
     /**
