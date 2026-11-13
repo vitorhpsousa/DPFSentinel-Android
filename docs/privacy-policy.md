@@ -43,7 +43,7 @@ in the app's private settings. The app is excluded from Android's cloud backup.
 - **Sharing.** A log file leaves the phone when you press Share on it and pick where it goes.
 - **Telegram, only if you set it up.** If you enter your own Telegram bot token and chat id, the app
   sends to that chat, through Telegram's servers:
-  - alerts and status replies (soot, temperatures, speed, mileage and the like);
+  - a message when logging starts, alerts and status replies (soot, temperatures, speed, mileage and the like);
   - a daily report that **uploads the new log files**. These are the files described above, so they
     include altitude and speed, and **your route if "Log position" is on**.
 

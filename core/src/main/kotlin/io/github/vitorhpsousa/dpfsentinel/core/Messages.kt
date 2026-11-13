@@ -41,6 +41,19 @@ object Messages {
             "next regen: $estimate"
     }
 
+    /**
+     * Sent once when a drive starts being logged: proof that it is working, with the first readings.
+     * [auto] = nobody tapped Start (the app woke itself).
+     */
+    fun loggingStarted(time: String, session: Int, auto: Boolean, row: Row?, estimate: String, u: Units = Units.UK): String {
+        val head = "DPF Sentinel is logging, $time (session $session, ${if (auto) "started by itself" else "started by hand"})"
+        if (row == null || row.soot.isNaN()) return "$head\nConnected to the car; no filter reading yet."
+        return "$head\n" +
+            "soot ${n(row.soot, 1)} g, ${u.distance(row.sinceRegen, 1)} since regen\n" +
+            "DPF ${n(row.diffPressure, 0)} hPa, EGT ${u.temp(row.egt)}, battery ${n(row.batteryV, 1)} V\n" +
+            "next regen: $estimate"
+    }
+
     fun dailyReport(date: String, fileCount: Int, bytes: Long, latestLine: String): String =
         "DPF Sentinel (phone) report, $date\n$fileCount file(s), ${fmtBytes(bytes)} to send\n$latestLine\n\nFound this useful? $KOFI_URL"
 

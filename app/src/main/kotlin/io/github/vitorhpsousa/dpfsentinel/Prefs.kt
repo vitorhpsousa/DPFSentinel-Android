@@ -49,6 +49,16 @@ class Prefs(context: Context) {
         get() = p.getInt("tgBoot", 0)
         set(v) = p.edit().putInt("tgBoot", v).apply()
 
+    /** Send a Telegram message when a drive starts being logged (on unless switched off). */
+    var tgStartNotice: Boolean
+        get() = p.getBoolean("tgStartMsg", true)
+        set(v) = p.edit().putBoolean("tgStartMsg", v).apply()
+
+    /** Wall-clock ms of the last "logging started" message, so a quick restart doesn't repeat it. */
+    var tgLastStartNotice: Long
+        get() = p.getLong("tgStartMsgAt", 0)
+        set(v) = p.edit().putLong("tgStartMsgAt", v).apply()
+
     var tgUpdateOffset: Long
         get() = p.getLong("tgOffset", 0)
         set(v) = p.edit().putLong("tgOffset", v).apply()
