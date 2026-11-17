@@ -75,7 +75,7 @@ fun TelegramCard(s: Snapshot, units: Units) {
 
     Text("Telegram", fontWeight = FontWeight.Bold, fontSize = 20.sp)
     Text(
-        "A message when a drive starts being logged, regen start/finish and health alerts, a daily report with the new logs, and /status replies. " +
+        "A message each time the app connects to the car, regen start/finish and health alerts, a daily report with the new logs, and /status replies. " +
             "Create a bot with @BotFather in Telegram, paste its token here, send your bot any message, then tap Find my chat.",
         color = Muted, fontSize = 12.sp,
     )
@@ -89,7 +89,7 @@ fun TelegramCard(s: Snapshot, units: Units) {
     OutlinedButton(onClick = {
         found = "Looking…"
         choices = emptyList()
-        telegram.findChats(token) { list, msg ->
+        telegram.findChats(token, chat) { list, msg ->
             onMain {
                 found = msg
                 if (list.size == 1) chat = list[0].id.toString() else choices = list
@@ -108,7 +108,7 @@ fun TelegramCard(s: Snapshot, units: Units) {
         Text("Message me when logging starts", Modifier.weight(1f))
         Switch(startMsg, { startMsg = it; prefs.tgStartNotice = it })
     }
-    Text("One message per drive with the first readings, so you can see it is working without opening the app.", color = Muted, fontSize = 12.sp)
+    Text("A message with the first readings each time the app connects to the adapter and the car answers, so you can see it is working without opening the app.", color = Muted, fontSize = 12.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(onClick = { save() }) { Text("Save") }
         OutlinedButton(onClick = {

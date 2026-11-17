@@ -13,6 +13,9 @@ data class Snapshot(
     val connected: Boolean = false,
     val adapterName: String = "",
     val row: Row? = null,
+    /** The last row the car answered and when (wall-clock ms, 0 = never): kept while not connected and across restarts. */
+    val lastRow: Row? = null,
+    val lastRowAtMs: Long = 0,
     val stale: Boolean = true,
     val regenActive: Boolean = false,
     /** An open regen that is on hold: the flag is off but it is not yet called finished or cut short. */

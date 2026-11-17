@@ -31,11 +31,32 @@ class StartNoticeTest {
         assertFalse(n.due(81_000, hasData = true, hasSoot = true))
     }
 
-    @Test fun `a reconnection in the same session does not fire again`() {
+    @Test fun `silence on the same connection does not fire again`() {
         val n = StartNotice()
         assertTrue(n.due(1000, hasData = true, hasSoot = true))
         assertFalse(n.due(2000, hasData = false, hasSoot = false))
         assertFalse(n.due(400_000, hasData = true, hasSoot = true))
+    }
+
+    @Test fun `a new connection fires again, once`() {
+        val n = StartNotice()
+        assertTrue(n.due(1000, hasData = true, hasSoot = true))
+        n.reset()
+        assertFalse(n.done)
+        assertFalse(n.due(300_000, hasData = false, hasSoot = false))
+        assertFalse(n.due(301_000, hasData = true, hasSoot = false))
+        assertTrue(n.due(302_000, hasData = true, hasSoot = true))
+        assertFalse(n.due(303_000, hasData = true, hasSoot = true))
+    }
+
+    @Test fun `last reading survives being stored`() {
+        val r = row("dpf_soot_level_g" to 12.34, "engine_rpm" to 800.0)
+        val back = Row.decode(r.encode())!!
+        assertEquals(12.34, back.soot)
+        assertEquals(800.0, back.rpm)
+        assertTrue(back.egt.isNaN())
+        assertEquals(null, Row.decode(""))
+        assertEquals(null, Row.decode("1,2,3"))
     }
 
     @Test fun `gap rule between messages`() {

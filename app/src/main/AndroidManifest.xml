@@ -78,6 +78,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- "Look for the car every day at HH:MM": the daily alarm. -->
+        <receiver
+            android:name=".DailyWindowReceiver"
+            android:exported="false" />
+
         <!-- Re-arms the adapter watch after a reboot or an app update. Does not start logging. -->
         <receiver
             android:name=".RearmReceiver"

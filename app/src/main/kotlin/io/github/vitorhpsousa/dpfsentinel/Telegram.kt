@@ -109,7 +109,7 @@ class Telegram(context: Context) {
      * without an offset, so nothing is confirmed and a later /status still reaches the logger.
      * The second value is what to show: "Found: ...", what to do when nobody wrote, or the error.
      */
-    fun findChats(token: String, done: (List<ChatCandidate>, String) -> Unit) {
+    fun findChats(token: String, typedChat: String, done: (List<ChatCandidate>, String) -> Unit) {
         exec.execute {
             val t = token.trim()
             val problem = tokenProblem(t)
@@ -121,7 +121,12 @@ class Telegram(context: Context) {
             done(
                 found,
                 when (found.size) {
-                    0 -> "Send any message to your bot in Telegram, then tap Find my chat again"
+                    // Telegram hands a message over once, and the /status check has usually taken the older ones.
+                    0 -> if (TelegramLogic.normaliseChatId(typedChat) != null) {
+                        "No new message to read, but a recipient ID is already filled in: tap Send test to check it"
+                    } else {
+                        "Telegram only shows messages the app hasn't read yet. Send your bot a new message now, then tap Find my chat again"
+                    }
                     1 -> "Found: ${label(found[0])}"
                     else -> "Several chats wrote to this bot. Pick yours:"
                 },

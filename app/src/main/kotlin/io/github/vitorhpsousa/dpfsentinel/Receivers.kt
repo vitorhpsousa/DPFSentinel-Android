@@ -32,5 +32,6 @@ class RearmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         AutoSetup.observe(context)
+        DailyWindow.schedule(context)   // alarms do not survive a reboot
     }
 }

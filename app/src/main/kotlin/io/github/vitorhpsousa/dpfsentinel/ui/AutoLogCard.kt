@@ -19,10 +19,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -42,6 +44,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import io.github.vitorhpsousa.dpfsentinel.AutoSetup
+import io.github.vitorhpsousa.dpfsentinel.DailyWindow
+import io.github.vitorhpsousa.dpfsentinel.core.DailyWindowLogic
 import io.github.vitorhpsousa.dpfsentinel.Prefs
 import kotlinx.coroutines.delay
 import java.text.DateFormat
@@ -94,6 +98,8 @@ fun AutoLogCard() {
     val st = remember(tick) { AutoLogState(ctx, prefs) }
     var message by remember { mutableStateOf("") }
     var pickCar by remember { mutableStateOf(false) }
+    var dailyOn by remember { mutableStateOf(prefs.dailyOn) }
+    var dailyTime by remember { mutableStateOf("%02d:%02d".format(prefs.dailyHour, prefs.dailyMinute)) }
 
     val chooser = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         message = if (result.resultCode == Activity.RESULT_OK) AutoSetup.onChooserResult(ctx, result.data) else "No adapter chosen"
@@ -104,11 +110,19 @@ fun AutoLogCard() {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Automatic logging", Modifier.weight(1f), fontWeight = FontWeight.Bold, fontSize = 20.sp)
-                Switch(st.enabled, { prefs.autoLog = it; tick++ })
+                Switch(st.enabled, { prefs.autoLog = it; DailyWindow.schedule(ctx); tick++ })
             }
             Check(st.nearby, "Nearby devices allowed")
             Check(st.notifications, "Notifications allowed")
-            Check(st.paired, if (st.paired) "Adapter paired (${st.adapter})" else "Adapter not paired yet")
+            Check(st.paired, if (st.paired) "Adapter linked to Android (${st.adapter})" else "Adapter not linked to Android yet")
+            if (!st.paired && AutoSetup.supported(ctx)) {
+                Text(
+                    "The app already finds the adapter while it is open. Linking it is one extra step, done once, so Android wakes the app " +
+                        "when the adapter is near and the phone is in your pocket: sit in the car with the ignition on, tap the button below, " +
+                        "and pick the adapter in the list Android shows.",
+                    color = Muted, fontSize = 12.sp,
+                )
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) { Check(st.car.isNotEmpty(), "Car Bluetooth: ${st.car.ifEmpty { "None" }}") }
                 TextButton(onClick = { pickCar = true }) { Text("Choose") }
@@ -137,7 +151,7 @@ fun AutoLogCard() {
                         },
                         onError = { message = it },
                     )
-                }) { Text("Set up automatic logging") }
+                }) { Text("Link the adapter now") }
             } else {
                 OutlinedButton(onClick = { AutoSetup.remove(ctx); message = "Removed"; tick++ }) { Text("Remove") }
             }
@@ -147,12 +161,31 @@ fun AutoLogCard() {
                     color = Muted, fontSize = 12.sp,
                 )
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Also look for the car every day at", Modifier.weight(1f))
+                OutlinedTextField(
+                    dailyTime,
+                    { t ->
+                        dailyTime = t
+                        DailyWindowLogic.parse(t)?.let { (h, m) -> prefs.dailyHour = h; prefs.dailyMinute = m; DailyWindow.schedule(ctx) }
+                    },
+                    singleLine = true, isError = DailyWindowLogic.parse(dailyTime) == null,
+                    modifier = Modifier.width(92.dp),
+                )
+                Switch(dailyOn, { dailyOn = it; prefs.dailyOn = it; DailyWindow.schedule(ctx) })
+            }
+            Text(
+                "For 15 minutes from that time (24-hour clock, e.g. 08:20) the app tries to reach the adapter, for a drive that starts at " +
+                    "the same time every day. Needs Battery: Unrestricted, or the adapter linked.",
+                color = Muted, fontSize = 12.sp,
+            )
             if (message.isNotEmpty()) Text(message, color = Amber, fontSize = 12.sp)
             if (st.last.isNotEmpty()) Text("Last automatic start: ${st.last}", color = Muted, fontSize = 12.sp)
         }
     }
     Text(
-        "After this, logging starts by itself when you get in the car. GPS is only added when you open the app.",
+        "Logging starts when you open the app, when the car's Bluetooth connects, when the linked adapter comes near, and at the daily time if set. " +
+            "GPS is only added when you open the app.",
         color = Muted, fontSize = 12.sp,
     )
 

@@ -21,6 +21,19 @@ class Row(val values: DoubleArray = DoubleArray(Pids.COLUMNS.size) { Double.NaN 
     val maf get() = get("maf_flow")
     val regenActive get() = get("dpf_regen_active").let { !it.isNaN() && it != 0.0 }
 
+    /** For keeping the last reading across app restarts: one value per column, empty = no reading. */
+    fun encode(): String = values.joinToString(",") { if (it.isNaN()) "" else it.toString() }
+
     fun anyPid(): Boolean = (0 until Pids.TABLE.size).any { !values[it].isNaN() }
     // The idle-pressure check needs history (regen, warm-up, a held reading): see IdleBlockageWatch.
+
+    companion object {
+        /** Null when [text] is empty or was written by a version with a different column list. */
+        fun decode(text: String): Row? {
+            if (text.isEmpty()) return null
+            val parts = text.split(",")
+            if (parts.size != Pids.COLUMNS.size) return null
+            return Row(DoubleArray(parts.size) { parts[it].toDoubleOrNull() ?: Double.NaN })
+        }
+    }
 }
