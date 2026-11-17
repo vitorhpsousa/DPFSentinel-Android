@@ -28,6 +28,19 @@ class DpfApp : Application() {
                 description = "Shown when logging could not start by itself"
             },
         )
+        // What the screens show before logging starts: the last reading, marked as old.
+        val prefs = Prefs(this)
+        runCatching {
+            val health = io.github.vitorhpsousa.dpfsentinel.core.HealthState.decode(prefs.health)
+            LiveState.update {
+                it.copy(
+                    lastRow = io.github.vitorhpsousa.dpfsentinel.core.Row.decode(prefs.lastRow),
+                    lastRowAtMs = prefs.lastRowAt,
+                    estimate = io.github.vitorhpsousa.dpfsentinel.core.Messages.estimate(health, prefs.units),
+                )
+            }
+        }
+        DailyWindow.schedule(this)
         // Whether the phone UI is on screen: only then may the logger also ask for the location
         // foreground-service type (Android refuses it for starts made from the background).
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

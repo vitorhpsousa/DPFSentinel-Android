@@ -49,12 +49,12 @@ class Prefs(context: Context) {
         get() = p.getInt("tgBoot", 0)
         set(v) = p.edit().putInt("tgBoot", v).apply()
 
-    /** Send a Telegram message when a drive starts being logged (on unless switched off). */
+    /** Send a Telegram message each time the app connects to the adapter and the car answers (on unless switched off). */
     var tgStartNotice: Boolean
         get() = p.getBoolean("tgStartMsg", true)
         set(v) = p.edit().putBoolean("tgStartMsg", v).apply()
 
-    /** Wall-clock ms of the last "logging started" message, so a quick restart doesn't repeat it. */
+    /** Wall-clock ms of the last "logging started" message, so a link that drops and returns doesn't repeat it. */
     var tgLastStartNotice: Long
         get() = p.getLong("tgStartMsgAt", 0)
         set(v) = p.edit().putLong("tgStartMsgAt", v).apply()
@@ -109,6 +109,28 @@ class Prefs(context: Context) {
     var autoLastResult: String
         get() = p.getString("autoLastResult", "") ?: ""
         set(v) = p.edit().putString("autoLastResult", v).apply()
+
+    /** The last row the car answered, and when (wall-clock ms): shown, marked as old, while not connected. */
+    var lastRow: String
+        get() = p.getString("lastRow", "") ?: ""
+        set(v) = p.edit().putString("lastRow", v).apply()
+
+    var lastRowAt: Long
+        get() = p.getLong("lastRowAt", 0)
+        set(v) = p.edit().putLong("lastRowAt", v).apply()
+
+    /** Look for the car every day for 15 minutes from this time (off unless switched on). */
+    var dailyOn: Boolean
+        get() = p.getBoolean("dailyOn", false)
+        set(v) = p.edit().putBoolean("dailyOn", v).apply()
+
+    var dailyHour: Int
+        get() = p.getInt("dailyHour", 8)
+        set(v) = p.edit().putInt("dailyHour", v).apply()
+
+    var dailyMinute: Int
+        get() = p.getInt("dailyMin", 20)
+        set(v) = p.edit().putInt("dailyMin", v).apply()
 
     /** Write latitude/longitude to the logs (speed, altitude and grade are logged regardless). Off unless chosen. */
     var logPosition: Boolean

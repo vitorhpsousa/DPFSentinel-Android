@@ -50,6 +50,10 @@ val Green = Color(0xFF43A047)
 val Amber = Color(0xFFFFB300)
 val Red = Color(0xFFE53935)
 val Muted = Color(0xFF9AA0A6)
+/** Readings that are not live: the last ones the car gave. */
+val Orange = Color(0xFFFF7A1A)
+
+private val PHONE_TILES = setOf("Grade", "Altitude", "GPS speed")
 
 fun fmt(v: Double, d: Int): String = if (v.isNaN()) "--" else String.format(Locale.getDefault(), "%.${d}f", v)
 
@@ -58,7 +62,11 @@ fun zoneColor(z: Int) = when (z) { 2 -> Red; 1 -> Amber; else -> Green }
 @Composable
 fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
     val ctx = LocalContext.current
-    val r = s.row
+    // Not connected (or the car is silent): keep showing the last reading, in orange, with its time.
+    val live = s.row != null && !s.stale
+    val old = !live && s.lastRow != null && s.lastRowAtMs > 0
+    val r = if (old) s.lastRow else s.row
+    val valueColor = if (old) Orange else Color.Unspecified
     val u = Prefs(ctx).units
     val nan = Double.NaN
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -71,6 +79,10 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
             else Button(onClick = onStart, colors = ButtonDefaults.buttonColors(containerColor = Green)) { Text("Start logging") }
         }
 
+        if (old) {
+            val at = java.text.SimpleDateFormat("EEE d MMM, HH:mm", Locale.getDefault()).format(java.util.Date(s.lastRowAtMs))
+            Text("Not live: showing the last reading, from $at", color = Orange, fontWeight = FontWeight.Bold)
+        }
         if (s.regenActive) {
             val mins = if (s.regenStartedAtMs > 0) (SystemClock.elapsedRealtime() - s.regenStartedAtMs) / 60000 else 0
             Banner(Messages.REGEN_TICK, Messages.REGEN_START + "\n$mins min so far · EGT ${u.temp(r?.egt ?: nan)}", Amber)
@@ -90,7 +102,7 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
                 Text(
                     if (soot.isNaN()) "--" else "${fmt(soot, 1)} g",
                     fontSize = 56.sp, fontWeight = FontWeight.Bold,
-                    color = if (soot.isNaN() || s.stale) Muted else zoneColor(s.sootZone),
+                    color = if (soot.isNaN()) Muted else if (old) Orange else if (s.stale) Muted else zoneColor(s.sootZone),
                 )
                 Text("Next regen: ${s.estimate}", fontSize = 20.sp)
                 Text(
@@ -129,7 +141,8 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
         )
         tiles.chunked(3).forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                line.forEach { (k, v) -> Tile(k, v, Modifier.weight(1f)) }
+                // The phone's own values (grade, altitude, GPS) are never the car's old reading.
+                line.forEach { (k, v) -> Tile(k, v, Modifier.weight(1f), if (k in PHONE_TILES) Color.Unspecified else valueColor) }
             }
         }
 
@@ -196,10 +209,10 @@ private fun SettingsBanner(title: String, text: String, intent: () -> Intent) {
 }
 
 @Composable
-private fun Tile(label: String, value: String, modifier: Modifier) {
+private fun Tile(label: String, value: String, modifier: Modifier, color: Color = Color.Unspecified) {
     Column(modifier.background(Color(0xFF15181C), RoundedCornerShape(10.dp)).padding(10.dp)) {
         Text(label, color = Muted, fontSize = 11.sp)
-        Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text(value, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = color)
     }
 }
 

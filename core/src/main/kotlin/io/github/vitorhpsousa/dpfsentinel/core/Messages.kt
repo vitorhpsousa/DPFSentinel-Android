@@ -42,7 +42,7 @@ object Messages {
     }
 
     /**
-     * Sent once when a drive starts being logged: proof that it is working, with the first readings.
+     * Sent each time the app connects to the adapter and the car answers: proof that it is working, with the first readings.
      * [auto] = nobody tapped Start (the app woke itself).
      */
     fun loggingStarted(time: String, session: Int, auto: Boolean, row: Row?, estimate: String, u: Units = Units.UK): String {

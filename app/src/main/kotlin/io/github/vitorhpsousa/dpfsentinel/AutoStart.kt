@@ -28,7 +28,7 @@ object AutoStart {
     private var lastReason = ""
 
     /** Returns "" when logging was started or there was nothing to do, else why it could not start. */
-    fun request(context: Context, reason: String): String {
+    fun request(context: Context, reason: String, giveUpMs: Long = 0L): String {
         val app = context.applicationContext
         val prefs = Prefs(app)
         if (!prefs.autoLog || LiveState.state.value.running) return ""
@@ -45,7 +45,7 @@ object AutoStart {
             return failed(app, "$reason: the Nearby devices permission is off")
         }
         return try {
-            LoggerService.start(app, auto = true)
+            LoggerService.start(app, auto = true, giveUpMs = giveUpMs)
             Log.i(TAG, "started ($reason)")
             prefs.autoLastTime = System.currentTimeMillis()
             prefs.autoLastResult = "ok ($reason)"

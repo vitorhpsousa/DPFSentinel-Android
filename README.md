@@ -73,8 +73,8 @@ if the car shows "Start logging from the phone app", tap Start on the phone once
 *Settings → Telegram*: create a bot with @BotFather in Telegram, paste its token, send your bot any message, then tap
 **Find my chat** (for a private chat the recipient ID is your own Telegram user ID) and **Send test**. You then get:
 
-- one message when a drive starts being logged, with the first readings (switch: *Message me when logging starts*;
-  not repeated within 10 minutes);
+- one message each time the app connects to the adapter and the car answers, with the first readings
+  (switch: *Message me when logging starts*; not repeated within 2 minutes);
 - regen started / finished / interrupted, and the health warnings (3 fast regens, oil reminder, slow warm-up),
   queued while the phone is offline;
 - a daily report after the set time (17:30 by default) with the newest session logs not sent yet

@@ -44,6 +44,8 @@ class LoggerService : Service() {
     @Volatile private var stopReason = ""
     // Started by AutoStart (or restarted by Android) rather than by the user: gives up sooner.
     @Volatile private var autoSession = false
+    // How long to keep trying before the car has answered once (0 = the normal idle limit).
+    @Volatile private var firstContactLimitMs = 0L
     private var worker: Thread? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var prefs: Prefs
@@ -90,9 +92,13 @@ class LoggerService : Service() {
             return START_NOT_STICKY
         }
         AutoStart.clearNotification(this)
+        val giveUp = intent?.getLongExtra(EXTRA_GIVE_UP, 0L) ?: 0L
         if (!auto) autoSession = false
+        // A plain Start (the button, or the app coming on screen during a session) waits the full time.
+        if (running && !auto && giveUp == 0L) firstContactLimitMs = 0L
         if (!running) {
             autoSession = auto
+            firstContactLimitMs = if (giveUp > 0L) giveUp else if (auto) AUTO_GIVE_UP_MS else 0L
             running = true
             wakeLock = getSystemService(PowerManager::class.java)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DpfSentinel:logger").apply { acquire(12 * 60 * 60 * 1000L) }
@@ -176,6 +182,10 @@ class LoggerService : Service() {
         var lastCarMs = 0L   // last row with any decoded PID; the session starts the clock
         var crashed = false
         var latest: Row? = null
+        // The last row the car answered: stays on the screens (marked as old) once the link is gone.
+        var lastGood: Row? = Row.decode(prefs.lastRow)
+        var lastGoodAt = prefs.lastRowAt
+        var lastGoodSaved = 0L
         var status = "Looking for the OBD adapter…"
         val power = getSystemService(PowerManager::class.java)
 
@@ -190,6 +200,8 @@ class LoggerService : Service() {
                     connected = elm.connected(),
                     adapterName = elm.name,
                     row = row,
+                    lastRow = lastGood,
+                    lastRowAtMs = lastGoodAt,
                     stale = !elm.connected() || row == null || !row.anyPid(),
                     regenActive = (watch.active && !watch.paused) || (row?.regenActive ?: false),
                     regenPaused = watch.paused && !(row?.regenActive ?: false),
@@ -267,6 +279,7 @@ class LoggerService : Service() {
                 return false
             }
             connectFails = 0
+            startNotice.reset()   // a new connection: say so on Telegram once the car answers
             prefs.adapterAddress = dev.address
             prefs.adapterName = elm.name
             status = "Connected to ${elm.name}"
@@ -280,7 +293,8 @@ class LoggerService : Service() {
                 // Parked, or walked off with the phone: give up rather than retry all night; the
                 // automatic start (adapter in range, car Bluetooth, Android Auto) brings it back
                 // next drive. An automatic start that never reached the car gives up sooner.
-                val idleLimit = if (autoSession && lastCarMs == 0L) AUTO_GIVE_UP_MS else IDLE_STOP_MS
+                val firstLimit = firstContactLimitMs
+                val idleLimit = if (firstLimit > 0L && lastCarMs == 0L) firstLimit else IDLE_STOP_MS
                 if (now - lastCarMs >= idleLimit) {
                     stopReason = "Stopped: no data from the car for ${idleLimit / 60_000} min"
                     break
@@ -341,11 +355,21 @@ class LoggerService : Service() {
                     alert(if (z == 2) "Soot high" else "Soot rising", text, NOTIF_SOOT)
                 }
 
-                if (row.anyPid()) lastCarMs = now
-                // "Logging has started" on Telegram: once per drive, with the first real readings.
-                if (startNotice.due(now, row.anyPid(), !row.soot.isNaN())) {
+                if (row.anyPid()) {
+                    lastCarMs = now
+                    lastGood = row
+                    lastGoodAt = System.currentTimeMillis()
+                    if (now - lastGoodSaved >= 30_000L) {
+                        lastGoodSaved = now
+                        prefs.lastRow = row.encode()
+                        prefs.lastRowAt = lastGoodAt
+                    }
+                }
+                // "Connected and logging" on Telegram: once per connection, with the first real readings.
+                // Not counted while Telegram is off, so setting it up mid-drive still gets the message.
+                if (prefs.tgStartNotice && telegram.enabled && startNotice.due(now, row.anyPid(), !row.soot.isNaN())) {
                     val wallMs = System.currentTimeMillis()
-                    if (prefs.tgStartNotice && telegram.enabled && StartNotice.allowed(wallMs, prefs.tgLastStartNotice)) {
+                    if (StartNotice.allowed(wallMs, prefs.tgLastStartNotice)) {
                         prefs.tgLastStartNotice = wallMs
                         telegram.event(
                             Messages.loggingStarted(
@@ -406,6 +430,7 @@ class LoggerService : Service() {
                     LiveState.update { it.copy(regenActive = false, regenPaused = false, regenStartedAtMs = 0, lastEvent = event, lastAlert = alerted) }
                 }
             }.onFailure { Log.w(TAG, "closing the open regen failed", it) }
+            lastGood?.let { prefs.lastRow = it.encode(); prefs.lastRowAt = lastGoodAt }
             elm.close()
             sensors.stop()
             session.close()
@@ -473,8 +498,13 @@ class LoggerService : Service() {
         private const val BLANK_ROWS_REINIT = 10
         private const val BLANK_ROWS_RECONNECT = 30
         private const val IDLE_STOP_MS = 10 * 60_000L
-        private const val AUTO_GIVE_UP_MS = 3 * 60_000L
+        const val AUTO_GIVE_UP_MS = 3 * 60_000L
         private const val EXTRA_AUTO = "auto"
+        private const val EXTRA_GIVE_UP = "giveUpMs"
+
+        /** Stop was tapped: opening the app again does not restart logging until Start is tapped. */
+        @Volatile var stoppedByUser = false
+            private set
         private const val CRASH_WINDOW_MS = 10 * 60_000L
         private const val MAX_CRASHES = 3
 
@@ -491,12 +521,18 @@ class LoggerService : Service() {
         /**
          * Throws if Android refuses a foreground-service start (e.g. from the background).
          * [auto] marks a start nobody tapped (see AutoStart): car data only, and a shorter give-up.
+         * [giveUpMs] > 0: stop if the car has not answered once within that time.
          */
-        fun start(context: Context, auto: Boolean = false) {
-            ContextCompat.startForegroundService(context, Intent(context, LoggerService::class.java).putExtra(EXTRA_AUTO, auto))
+        fun start(context: Context, auto: Boolean = false, giveUpMs: Long = 0L) {
+            stoppedByUser = false
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, LoggerService::class.java).putExtra(EXTRA_AUTO, auto).putExtra(EXTRA_GIVE_UP, giveUpMs),
+            )
         }
 
         fun stop(context: Context) {
+            stoppedByUser = true
             context.stopService(Intent(context, LoggerService::class.java))
         }
     }

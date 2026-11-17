@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import io.github.vitorhpsousa.dpfsentinel.LiveState
 import io.github.vitorhpsousa.dpfsentinel.LoggerService
+import io.github.vitorhpsousa.dpfsentinel.Prefs
 
 class MainActivity : ComponentActivity() {
     private val askPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
@@ -69,8 +70,13 @@ class MainActivity : ComponentActivity() {
     // only with "Allow all the time"). Now that the app is on screen, a second start adds GPS.
     override fun onStart() {
         super.onStart()
-        if (LiveState.state.value.running && !LoggerService.gpsOn && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
+        val running = LiveState.state.value.running
+        if (running && !LoggerService.gpsOn && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             runCatching { LoggerService.start(this) }
+        } else if (!running && Prefs(this).autoLog && !LoggerService.stoppedByUser && requiredPermissions().all { granted(it) }) {
+            // Opening the app is asking it to log: look for the car straight away, and give up
+            // after a few minutes if it isn't there (opened at home to read the logs).
+            runCatching { LoggerService.start(this, giveUpMs = LoggerService.AUTO_GIVE_UP_MS) }
         }
     }
 
