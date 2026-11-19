@@ -31,12 +31,26 @@ class DpfApp : Application() {
         // What the screens show before logging starts: the last reading, marked as old.
         val prefs = Prefs(this)
         runCatching {
-            val health = io.github.vitorhpsousa.dpfsentinel.core.HealthState.decode(prefs.health)
+            val tracker = io.github.vitorhpsousa.dpfsentinel.core.HealthTracker(io.github.vitorhpsousa.dpfsentinel.core.HealthState.decode(prefs.health))
+            val h = tracker.state
+            val now = System.currentTimeMillis() / 1000.0
             LiveState.update {
                 it.copy(
                     lastRow = io.github.vitorhpsousa.dpfsentinel.core.Row.decode(prefs.lastRow),
                     lastRowAtMs = prefs.lastRowAt,
-                    estimate = io.github.vitorhpsousa.dpfsentinel.core.Messages.estimate(health, prefs.units),
+                    // The estimate is worked out from live rows only, so the one that went with the last reading is kept.
+                    estimate = prefs.lastEstimate.ifEmpty { "--" },
+                    triggerG = tracker.regenTriggerG(),
+                    health = HealthSummary(
+                        regensToday = tracker.regensToday(now),
+                        regensThisWeek = tracker.regensThisWeek(now),
+                        avgIntervalMi = tracker.avgRegenIntervalMi(),
+                        regensSinceOil = h.regensSinceOil,
+                        oilChangeOdoMi = h.oilChangeOdometerMi,
+                        lastWarmupMin = h.lastWarmupMinutes,
+                        warmupMedianMin = tracker.warmupMedianMin(),
+                        batteryV = h.lastBatteryV,
+                    ),
                 )
             }
         }

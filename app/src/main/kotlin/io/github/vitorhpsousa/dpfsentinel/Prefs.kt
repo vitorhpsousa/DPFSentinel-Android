@@ -115,6 +115,11 @@ class Prefs(context: Context) {
         get() = p.getString("lastRow", "") ?: ""
         set(v) = p.edit().putString("lastRow", v).apply()
 
+    /** The next-regen text that went with the last reading ("~42 mi"), "" = none yet. */
+    var lastEstimate: String
+        get() = p.getString("lastEst", "") ?: ""
+        set(v) = p.edit().putString("lastEst", v).apply()
+
     var lastRowAt: Long
         get() = p.getLong("lastRowAt", 0)
         set(v) = p.edit().putLong("lastRowAt", v).apply()

@@ -63,6 +63,8 @@ fun zoneColor(z: Int) = when (z) { 2 -> Red; 1 -> Amber; else -> Green }
 fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
     val ctx = LocalContext.current
     // Not connected (or the car is silent): keep showing the last reading, in orange, with its time.
+    // The last reading is kept value by value (LastKnown), so it also fills the moments when the
+    // link is up but the engine ECU is not answering yet or any more.
     val live = s.row != null && !s.stale
     val old = !live && s.lastRow != null && s.lastRowAtMs > 0
     val r = if (old) s.lastRow else s.row
@@ -72,7 +74,8 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(if (s.running) s.status else "Not logging", color = if (s.connected) Green else Muted)
+                // When stopped this says why ("Stopped: no data from the car for 10 min"), else "Not logging".
+                Text(s.status, color = if (s.connected && live) Green else if (s.connected) Amber else Muted)
                 if (s.running) Text("session_${s.session}.csv · ${s.rows} rows", color = Muted, fontSize = 12.sp)
             }
             if (s.running) OutlinedButton(onClick = onStop) { Text("Stop") }
@@ -88,7 +91,7 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
             Banner(Messages.REGEN_TICK, Messages.REGEN_START + "\n$mins min so far · EGT ${u.temp(r?.egt ?: nan)}", Amber)
         }
         if (s.regenPaused) Banner(Messages.REGEN_PAUSED, "Waiting to see whether it carries on or has finished.", Amber)
-        if (s.idleBlockage) Banner("DPF pressure high at idle", "Over ${IdleBlockageWatch.THRESHOLD_HPA.toInt()} hPa for a minute at warm idle, with no regen in the last 10 min. A possible blockage sign (threshold still being checked).", Red)
+        if (s.idleBlockage && live) Banner("DPF pressure high at idle", "Over ${IdleBlockageWatch.THRESHOLD_HPA.toInt()} hPa for a minute at warm idle, with no regen in the last 10 min. A possible blockage sign (threshold still being checked).", Red)
         if (s.running && s.writeError.isNotEmpty()) {
             Banner("Can't write the log file", "${s.writeError}. Is the phone's storage full? Live values still update.", Red)
         }
@@ -104,7 +107,7 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
                     fontSize = 56.sp, fontWeight = FontWeight.Bold,
                     color = if (soot.isNaN()) Muted else if (old) Orange else if (s.stale) Muted else zoneColor(s.sootZone),
                 )
-                Text("Next regen: ${s.estimate}", fontSize = 20.sp)
+                Text(if (old && s.estimate != "--") "Next regen, at the last reading: ${s.estimate}" else "Next regen: ${s.estimate}", fontSize = 20.sp)
                 Text(
                     buildString {
                         if (!s.triggerG.isNaN()) append("regen trigger ~${fmt(s.triggerG, 1)} g")
@@ -116,7 +119,7 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
             }
         }
 
-        if (s.history.size > 2) {
+        if (live && s.history.size > 2) {
             Chart("Soot (g), last 2 min", s.history, Amber) { it.soot }
             Chart("DPF ΔP (hPa)", s.history, Color(0xFF4FC3F7)) { it.diffPressure }
         }
@@ -158,7 +161,7 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
                 Text("Warm-up to ${u.temp(80.0)}: last ${fmt(h.lastWarmupMin, 1)} min · usual ${fmt(h.warmupMedianMin, 1)} min")
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(
-                    enabled = s.running && !(r?.odometer ?: Double.NaN).isNaN(),
+                    enabled = s.running && live && !(s.row?.odometer ?: Double.NaN).isNaN(),
                     onClick = { LoggerService.oilChangeRequested.set(true) },
                 ) { Text("Oil changed today") }
             }

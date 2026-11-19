@@ -46,6 +46,11 @@ class ObdPoller(private val elm: ElmTransport, private val raw: (header: String,
         return true
     }
 
+    /** The car started answering after a silence: every request is due now, backed-off ones included. */
+    fun retryAll(nowMs: Long) {
+        for (r in reqs) { r.nextDue = nowMs; r.fails = 0 }
+    }
+
     private fun setHeader(header: String): Boolean {
         if (currentHeader == header) return true
         if (!elm.send("ATSH$header").contains("OK")) {

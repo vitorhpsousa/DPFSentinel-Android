@@ -98,6 +98,8 @@ class LoggerService : Service() {
         // A plain Start (the button, or the app coming on screen during a session) waits the full time.
         if (running && !auto && giveUp == 0L) firstContactLimitMs = 0L
         if (!running) {
+            // Straight away, so the screens don't offer Start again while the worker gets going.
+            LiveState.update { it.copy(running = true, status = "Starting…") }
             autoSession = auto
             firstContactLimitMs = if (giveUp > 0L) giveUp else if (auto) AUTO_GIVE_UP_MS else 0L
             running = true
@@ -116,7 +118,10 @@ class LoggerService : Service() {
         worker = null
         wakeLock?.let { if (it.isHeld) it.release() }
         val why = stopReason.ifEmpty { "Not logging" }
-        LiveState.update { it.copy(running = false, connected = false, stale = true, status = why) }
+        LiveState.update {
+            it.copy(running = false, connected = false, stale = true, status = why, row = null,
+                regenActive = false, regenPaused = false, regenStartedAtMs = 0, idleBlockage = false, history = emptyList())
+        }
         super.onDestroy()
     }
 
@@ -188,6 +193,7 @@ class LoggerService : Service() {
         val lastKnown = LastKnown(Row.decode(prefs.lastRow), prefs.lastRowAt)
         var lastGood: Row? = lastKnown.row()
         var lastGoodSaved = 0L
+        var lastEstimate = prefs.lastEstimate   // the estimate that went with the last soot reading
         var status = "Looking for the OBD adapter…"
         val power = getSystemService(PowerManager::class.java)
 
@@ -195,20 +201,26 @@ class LoggerService : Service() {
             if (!running) return   // a stopping worker must not flip the screens back to "logging"
             val h = health.state
             val now = unix()
+            val link = elm.connected()
+            // "Live" means the number this app is about is live: one answered PID is not enough.
+            val liveNow = link && row != null && !row.soot.isNaN()
+            val est = Messages.estimate(h, prefs.units)
+            if (liveNow && est != "--") lastEstimate = est
             LiveState.set(
                 Snapshot(
                     running = true,
                     status = status,
-                    connected = elm.connected(),
+                    connected = link,
                     adapterName = elm.name,
                     row = row,
                     lastRow = lastGood,
                     lastRowAtMs = lastKnown.atMs,
-                    stale = !elm.connected() || row == null || !row.anyPid(),
-                    regenActive = (watch.active && !watch.paused) || (row?.regenActive ?: false),
-                    regenPaused = watch.paused && !(row?.regenActive ?: false),
+                    stale = !liveNow,
+                    // With the link down nobody knows whether the regen is still going: no banner.
+                    regenActive = link && ((watch.active && !watch.paused) || (row?.regenActive ?: false)),
+                    regenPaused = link && watch.paused && !(row?.regenActive ?: false),
                     regenStartedAtMs = if (watch.active) t0 + watch.startedAtMs else 0,
-                    estimate = Messages.estimate(h, prefs.units),
+                    estimate = if (liveNow) est else lastEstimate.ifEmpty { "--" },
                     estMiles = h.estMilesToRegen,
                     estNotSoon = h.estNotSoon,
                     estFromLiveRate = h.estFromLiveRate,
@@ -230,7 +242,7 @@ class LoggerService : Service() {
                     rows = session.rows,
                     lastEvent = lastEvent,
                     lastAlert = lastAlert,
-                    idleBlockage = row != null && idleWatch.flagged,
+                    idleBlockage = link && row != null && idleWatch.flagged,
                     writeError = session.writeError,
                     gpsFix = !gps.lat.isNaN(),
                     gpsSpeedKmh = gps.speedKmh,
@@ -310,6 +322,8 @@ class LoggerService : Service() {
                         if (!running) break
                         lastReconnect = ms()
                         publish(latest)
+                        // The notification must not keep saying "Soot 12.3 g" while the link is down.
+                        if (!elm.connected()) notifyLive(status, searching = true)
                     }
                     Thread.sleep(200)
                     continue
@@ -342,7 +356,8 @@ class LoggerService : Service() {
                     if (row.speed.isNaN()) gps.speedKmh else row.speed, rpm = row.rpm)
                 idleWatch.update(now, row.rpm, row.speed, row.diffPressure, row.coolant, watch.active || row.regenActive)
                 if (ev.type != RegenEvent.Type.NONE) postRegenEvent(ev)
-                if (oilChangeRequested.getAndSet(false) && !row.odometer.isNaN()) health.oilChangeNow(row.odometer)
+                // Kept until a row has the odometer in it: a tap is not lost on a row without one.
+                if (!row.odometer.isNaN() && oilChangeRequested.getAndSet(false)) health.oilChangeNow(row.odometer)
                 health.update(row, ev, now, wall)
                 for (a in health.takeAlerts()) {
                     val text = a.text(prefs.units)
@@ -359,12 +374,15 @@ class LoggerService : Service() {
 
                 if (row.anyPid()) {
                     lastCarMs = now
+                    // Woken after a silence: requests the sleeping car ignored were backed off to 30 s.
+                    if (blankRows > 0) poller.retryAll(now)
                     lastKnown.update(row, System.currentTimeMillis())
                     lastGood = lastKnown.row()
                     if (now - lastGoodSaved >= 30_000L) {
                         lastGoodSaved = now
                         lastGood?.let { prefs.lastRow = it.encode() }
                         prefs.lastRowAt = lastKnown.atMs
+                        prefs.lastEstimate = lastEstimate
                     }
                 }
                 // "Connected and logging" on Telegram: once per connection, with the first real readings.
@@ -432,7 +450,7 @@ class LoggerService : Service() {
                     LiveState.update { it.copy(regenActive = false, regenPaused = false, regenStartedAtMs = 0, lastEvent = event, lastAlert = alerted) }
                 }
             }.onFailure { Log.w(TAG, "closing the open regen failed", it) }
-            lastGood?.let { prefs.lastRow = it.encode(); prefs.lastRowAt = lastKnown.atMs }
+            lastGood?.let { prefs.lastRow = it.encode(); prefs.lastRowAt = lastKnown.atMs; prefs.lastEstimate = lastEstimate }
             elm.close()
             sensors.stop()
             session.close()
@@ -446,16 +464,21 @@ class LoggerService : Service() {
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    private fun liveNotification(text: String): Notification =
+    private fun liveNotification(text: String, searching: Boolean = false): Notification =
         NotificationCompat.Builder(this, DpfApp.CH_LIVE)
             .setSmallIcon(R.drawable.ic_dot)
-            .setContentTitle("DPF Sentinel is logging")
+            .setContentTitle(if (searching) "DPF Sentinel is looking for the car" else "DPF Sentinel is logging")
             .setContentText(text)
             .setSubText(if (gpsOn) "car data + GPS" else "car data only")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(openApp())
             .build()
+
+    @SuppressLint("MissingPermission")
+    private fun notifyLive(text: String, searching: Boolean) {
+        runCatching { NotificationManagerCompat.from(this).notify(NOTIF_LIVE, liveNotification(text, searching)) }
+    }
 
     @SuppressLint("MissingPermission")
     private fun updateLiveNotification(row: Row, estimate: String) {
