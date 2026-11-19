@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import io.github.vitorhpsousa.dpfsentinel.core.HealthState
 import io.github.vitorhpsousa.dpfsentinel.core.HealthTracker
 import io.github.vitorhpsousa.dpfsentinel.core.IdleBlockageWatch
+import io.github.vitorhpsousa.dpfsentinel.core.LastKnown
 import io.github.vitorhpsousa.dpfsentinel.core.GradeTracker
 import io.github.vitorhpsousa.dpfsentinel.core.Messages
 import io.github.vitorhpsousa.dpfsentinel.core.PhoneColumns
@@ -183,8 +184,9 @@ class LoggerService : Service() {
         var crashed = false
         var latest: Row? = null
         // The last row the car answered: stays on the screens (marked as old) once the link is gone.
-        var lastGood: Row? = Row.decode(prefs.lastRow)
-        var lastGoodAt = prefs.lastRowAt
+        // Per value, not per row: the last rows of a drive have no soot in them (see LastKnown).
+        val lastKnown = LastKnown(Row.decode(prefs.lastRow), prefs.lastRowAt)
+        var lastGood: Row? = lastKnown.row()
         var lastGoodSaved = 0L
         var status = "Looking for the OBD adapter…"
         val power = getSystemService(PowerManager::class.java)
@@ -201,7 +203,7 @@ class LoggerService : Service() {
                     adapterName = elm.name,
                     row = row,
                     lastRow = lastGood,
-                    lastRowAtMs = lastGoodAt,
+                    lastRowAtMs = lastKnown.atMs,
                     stale = !elm.connected() || row == null || !row.anyPid(),
                     regenActive = (watch.active && !watch.paused) || (row?.regenActive ?: false),
                     regenPaused = watch.paused && !(row?.regenActive ?: false),
@@ -357,12 +359,12 @@ class LoggerService : Service() {
 
                 if (row.anyPid()) {
                     lastCarMs = now
-                    lastGood = row
-                    lastGoodAt = System.currentTimeMillis()
+                    lastKnown.update(row, System.currentTimeMillis())
+                    lastGood = lastKnown.row()
                     if (now - lastGoodSaved >= 30_000L) {
                         lastGoodSaved = now
-                        prefs.lastRow = row.encode()
-                        prefs.lastRowAt = lastGoodAt
+                        lastGood?.let { prefs.lastRow = it.encode() }
+                        prefs.lastRowAt = lastKnown.atMs
                     }
                 }
                 // "Connected and logging" on Telegram: once per connection, with the first real readings.
@@ -430,7 +432,7 @@ class LoggerService : Service() {
                     LiveState.update { it.copy(regenActive = false, regenPaused = false, regenStartedAtMs = 0, lastEvent = event, lastAlert = alerted) }
                 }
             }.onFailure { Log.w(TAG, "closing the open regen failed", it) }
-            lastGood?.let { prefs.lastRow = it.encode(); prefs.lastRowAt = lastGoodAt }
+            lastGood?.let { prefs.lastRow = it.encode(); prefs.lastRowAt = lastKnown.atMs }
             elm.close()
             sensors.stop()
             session.close()

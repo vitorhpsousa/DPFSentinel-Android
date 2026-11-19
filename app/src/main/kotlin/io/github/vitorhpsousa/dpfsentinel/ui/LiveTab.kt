@@ -142,7 +142,10 @@ fun LiveTab(s: Snapshot, onStart: () -> Unit, onStop: () -> Unit) {
         tiles.chunked(3).forEach { line ->
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The phone's own values (grade, altitude, GPS) are never the car's old reading.
-                line.forEach { (k, v) -> Tile(k, v, Modifier.weight(1f), if (k in PHONE_TILES) Color.Unspecified else valueColor) }
+                // A value the car never gave stays a grey "--": orange is only for real, old numbers.
+                line.forEach { (k, v) ->
+                    Tile(k, v, Modifier.weight(1f), if (k in PHONE_TILES) Color.Unspecified else if (v.startsWith("--")) Muted else valueColor)
+                }
             }
         }
 
