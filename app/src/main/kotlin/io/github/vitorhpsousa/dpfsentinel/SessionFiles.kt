@@ -49,6 +49,11 @@ class SessionFiles(context: Context, val number: Int) {
     fun close() {
         runCatching { csv.close() }
         runCatching { raw.close() }
+        // The adapter was never reached (app opened at home, a daily-time try): leave no empty files behind.
+        if (rows == 0L) runCatching {
+            File(dir, "session_$number.csv").delete()
+            File(dir, "raw_$number.log").delete()
+        }
     }
 
     companion object {

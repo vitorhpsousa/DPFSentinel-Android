@@ -133,6 +133,15 @@ class HealthTracker(val state: HealthState = HealthState(), private val zone: Zo
     /** Set whenever something persistent changed; the caller saves state.encode() and clears it. */
     var dirty = false
 
+    init {
+        // A tracker is rebuilt from the saved state for every session. A warning that already
+        // stands (15 regens since the oil change, three fast regens) was given when it arose:
+        // it must not be given again at the start of every drive.
+        evalFastRegen()
+        evalOilReminder()
+        pending.clear()
+    }
+
     fun takeAlerts(): List<HealthAlert> = pending.toList().also { pending.clear() }
 
     fun oilChangeNow(currentOdometerMi: Double) {

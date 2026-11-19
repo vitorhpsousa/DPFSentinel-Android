@@ -106,6 +106,11 @@ class Prefs(context: Context) {
         get() = p.getString("carBtName", "") ?: ""
         set(v) = p.edit().putString("carBtName", v).apply()
 
+    /** The soot zone last alerted (0 none, 1 rising, 2 high), so each drive doesn't repeat it. */
+    var sootZone: Int
+        get() = p.getInt("sootZone", 0)
+        set(v) = p.edit().putInt("sootZone", v).apply()
+
     /** Stop tapped by hand (wall-clock ms, 0 = not since the last start): no restart by itself for a while. */
     var stoppedAt: Long
         get() = p.getLong("stoppedAt", 0)

@@ -177,7 +177,7 @@ class LoggerService : Service() {
         val poller = ObdPoller(elm) { h, r, reply -> session.raw(ms(), h, r, reply) }
         val watch = RegenWatch(units = { prefs.units })
         val health = HealthTracker(HealthState.decode(prefs.health))
-        val zone = SootZone()
+        val zone = SootZone(prefs.sootZone)
         val idleWatch = IdleBlockageWatch()
         val startNotice = StartNotice()
         var noticesSent = 0   // connect messages queued in this session
@@ -399,6 +399,7 @@ class LoggerService : Service() {
                     else "Soot ${"%.1f".format(row.soot)} g: rising towards a regeneration."
                     alert(if (z == 2) "Soot high" else "Soot rising", text, NOTIF_SOOT)
                 }
+                if (zone.zone != prefs.sootZone) prefs.sootZone = zone.zone
 
                 if (row.anyPid()) {
                     lastCarMs = now
@@ -475,7 +476,7 @@ class LoggerService : Service() {
                 val ev = watch.finish(now, wall)
                 if (ev.type != RegenEvent.Type.NONE) {
                     postRegenEvent(ev)
-                    health.update(latest ?: Row(), ev, now, wall)
+                    health.update(Row(), ev, now, wall)   // the event only: the last row was already counted
                     val event = lastEvent
                     val alerted = lastAlert
                     LiveState.update { it.copy(regenActive = false, regenPaused = false, regenStartedAtMs = 0, lastEvent = event, lastAlert = alerted) }
