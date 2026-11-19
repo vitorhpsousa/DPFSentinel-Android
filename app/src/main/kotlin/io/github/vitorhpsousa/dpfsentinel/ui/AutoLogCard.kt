@@ -101,6 +101,10 @@ fun AutoLogCard() {
     var dailyOn by remember { mutableStateOf(prefs.dailyOn) }
     var dailyTime by remember { mutableStateOf("%02d:%02d".format(prefs.dailyHour, prefs.dailyMinute)) }
 
+    // Allowed (or withdrawn) in Android's settings: set the alarm again in its new form.
+    val exact = remember(tick) { DailyWindow.canBeExact(ctx) }
+    LaunchedEffect(exact) { DailyWindow.schedule(ctx) }
+
     val chooser = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
         message = if (result.resultCode == Activity.RESULT_OK) AutoSetup.onChooserResult(ctx, result.data) else "No adapter chosen"
         tick++

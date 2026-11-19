@@ -26,6 +26,7 @@ import io.github.vitorhpsousa.dpfsentinel.core.GradeTracker
 import io.github.vitorhpsousa.dpfsentinel.core.Messages
 import io.github.vitorhpsousa.dpfsentinel.core.PhoneColumns
 import io.github.vitorhpsousa.dpfsentinel.core.ObdPoller
+import io.github.vitorhpsousa.dpfsentinel.core.Pids
 import io.github.vitorhpsousa.dpfsentinel.core.RegenEvent
 import io.github.vitorhpsousa.dpfsentinel.core.RegenWatch
 import io.github.vitorhpsousa.dpfsentinel.core.Row
@@ -95,10 +96,14 @@ class LoggerService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        AutoStart.clearNotification(this)
         val giveUp = intent?.getLongExtra(EXTRA_GIVE_UP, 0L) ?: 0L
         // The app coming on screen during a session only adds GPS: it is not a new start by hand.
         val addGps = intent?.getBooleanExtra(EXTRA_ADD_GPS, false) ?: false
+        if (addGps && !running) {   // the session ended just before the request arrived
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        AutoStart.clearNotification(this)
         if (!auto && !addGps) autoSession = false
         // A plain Start (the button) waits the full time.
         if (running && !auto && !addGps && giveUp == 0L) { firstContactLimitMs = 0L; startedHow = "by hand" }
@@ -274,7 +279,7 @@ class LoggerService : Service() {
             val title = when (ev.type) {
                 RegenEvent.Type.START -> "Filter cleaning started"
                 RegenEvent.Type.END -> "Filter cleaning finished"
-                RegenEvent.Type.INTERRUPTED -> "Filter cleaning cut short"
+                RegenEvent.Type.INTERRUPTED -> if (ev.headline == Messages.REGEN_UNSEEN_END) "Filter cleaning: end not seen" else "Filter cleaning cut short"
                 else -> ev.headline
             }
             alert(title, ev.text, if (ev.type == RegenEvent.Type.START) NOTIF_REGEN_START else NOTIF_REGEN_END, content = ev.headline)
@@ -325,7 +330,12 @@ class LoggerService : Service() {
                 val firstLimit = firstContactLimitMs
                 // The short limit is for "adapter never reached" only: once it answers, somebody is
                 // in the car (ignition on, engine not started yet), so wait the full time.
-                val idleLimit = if (firstLimit > 0L && lastCarMs == 0L && !adapterReached) maxOf(firstLimit, if (ext > 0L) extendLimitMs else 0L) else IDLE_STOP_MS
+                val asked = maxOf(firstLimit, if (ext > 0L) extendLimitMs else 0L)
+                val idleLimit = when {
+                    lastCarMs > 0L || firstLimit == 0L -> IDLE_STOP_MS
+                    adapterReached -> maxOf(IDLE_STOP_MS, asked)
+                    else -> asked
+                }
                 if (now - maxOf(lastCarMs, ext) >= idleLimit) {
                     stopReason = "Stopped: no data from the car for ${idleLimit / 60_000} min"
                     break
@@ -349,7 +359,7 @@ class LoggerService : Service() {
                         val u = prefs.units
                         telegram.tick(
                             statusText = { Messages.status(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")), null, "--", u) },
-                            latestLine = Messages.latestLine(lastGood, u),
+                            latestLine = Messages.latestLine(null, u),
                             currentSession = session.number,
                         )
                     }
@@ -476,7 +486,12 @@ class LoggerService : Service() {
                 val ev = watch.finish(now, wall)
                 if (ev.type != RegenEvent.Type.NONE) {
                     postRegenEvent(ev)
-                    health.update(Row(), ev, now, wall)   // the event only: the last row was already counted
+                    // The event, with the last soot and distance only (the estimate measures on from them).
+                    val at = Row()
+                    lastGood?.let { g ->
+                        for (c in listOf("dpf_soot_level_g", "dpf_dist_since_regen_mi")) at.values[Pids.col(c)] = g.values[Pids.col(c)]
+                    }
+                    health.update(at, ev, now, wall)
                     val event = lastEvent
                     val alerted = lastAlert
                     LiveState.update { it.copy(regenActive = false, regenPaused = false, regenStartedAtMs = 0, lastEvent = event, lastAlert = alerted) }
@@ -485,7 +500,7 @@ class LoggerService : Service() {
             lastGood?.let { prefs.lastRow = it.encode(); prefs.lastRowAt = lastKnown.atMs; prefs.lastEstimate = lastEstimate }
             // For AutoStart: a session that never heard the car makes the adapter trigger wait longer next time.
             if (lastCarMs > 0L) prefs.emptySessions = 0
-            else if (!crashed) { prefs.emptySessions = prefs.emptySessions + 1; prefs.emptyEndedAt = System.currentTimeMillis() }
+            else if (!crashed && adapterReached) { prefs.emptySessions = prefs.emptySessions + 1; prefs.emptyEndedAt = System.currentTimeMillis() }
             elm.close()
             sensors.stop()
             session.close()

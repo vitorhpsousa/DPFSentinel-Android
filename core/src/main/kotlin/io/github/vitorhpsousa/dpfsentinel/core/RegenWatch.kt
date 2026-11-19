@@ -93,7 +93,7 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val 
         inactiveStreak = 0
         val mins = (endMs - startMs).coerceAtLeast(0) / 60000
         val sootNow = soot()
-        val tail = "peak EGT ${units().temp(peakEgt)}, soot ${fmt(sootStart, 1)} g -> ${Units.num(sootNow, 1)} g" + clock(wallClock)
+        val tail = "peak EGT ${units().temp(peakEgt)}, soot ${Units.num(sootStart, 1)} g -> ${Units.num(sootNow, 1)} g" + clock(wallClock)
         return if (type == RegenEvent.Type.END) event(type, "took about $mins min, $tail")
         else {
             val detail = "ran about $mins min${if (why.isEmpty()) "" else " ($why)"}, $tail"
@@ -202,7 +202,7 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val 
             startMs = nowMs
             lastTickMs = nowMs
             peakEgt = if (egtC.isNaN()) 0.0 else egtC
-            sootStart = if (soot.isNaN()) 0.0 else soot
+            sootStart = soot   // NaN when not read yet: printed as "--"
             val distStart = if (distMi.isNaN()) 0.0 else distMi
             startWall = wallClock
             return event(

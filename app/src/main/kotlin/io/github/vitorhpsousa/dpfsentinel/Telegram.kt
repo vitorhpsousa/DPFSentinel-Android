@@ -29,7 +29,7 @@ class Telegram(context: Context) {
     private val exec = Executors.newSingleThreadExecutor()
     // Waiting alerts, oldest first. A "low" one (the connect message) is the first to go when full,
     // so it can never push out a regen or health alert. Saved to prefs on every change.
-    private class Item(val text: String, val low: Boolean)
+    private class Item(val text: String, val low: Boolean, val atMs: Long = System.currentTimeMillis())
     private val queue = ArrayDeque<Item>()
     private var lastPollMs = 0L
     private var retryAfterMs = 0L        // next try of a failed daily report
@@ -48,6 +48,8 @@ class Telegram(context: Context) {
         val ok get() = code == 200 && body.contains("\"ok\":true")
         /** Refused for good (bad token, unknown chat, malformed): sending the same thing again cannot work. */
         val permanent get() = code in 400..499 && code != 429
+        /** The file itself was refused (too big): the same upload cannot work later, but others can. */
+        val fileRefused get() = code == 413 || (code == 400 && body.contains("too", ignoreCase = true) && body.contains("file", ignoreCase = true))
         fun error() = TelegramLogic.describeError(code, body)
     }
 
@@ -60,7 +62,10 @@ class Telegram(context: Context) {
                 synchronized(queue) {
                     for (i in 0 until a.length()) {
                         val o = a.getJSONObject(i)
-                        queue.addLast(Item(o.getString("t"), o.optBoolean("low", false)))
+                        // "Keep driving 10 more minutes" is worse than nothing a day later.
+                        val at = o.optLong("at", 0L)
+                        val age = System.currentTimeMillis() - at
+                        if (age in 0..MAX_AGE_MS) queue.addLast(Item(o.getString("t"), o.optBoolean("low", false), at))
                     }
                 }
             }
@@ -71,7 +76,7 @@ class Telegram(context: Context) {
     // Call with the queue lock held.
     private fun saveQueue() {
         val a = org.json.JSONArray()
-        for (i in queue) a.put(JSONObject().put("t", i.text).put("low", i.low))
+        for (i in queue) a.put(JSONObject().put("t", i.text).put("low", i.low).put("at", i.atMs))
         prefs.tgQueue = if (queue.isEmpty()) "" else a.toString()
     }
 
@@ -244,7 +249,7 @@ class Telegram(context: Context) {
                 if (!r.ok) {
                     // Refused for good (too big, say): trying again cannot work, and it would hold
                     // back every later session. Skip that one file.
-                    if (r.permanent) { refused++; Log.w(TAG, "upload refused for good (${r.code}): ${f.name}"); continue }
+                    if (r.fileRefused) { refused++; Log.w(TAG, "upload refused for good (${r.code}): ${f.name}"); continue }
                     lastResult = "${r.error()} (${f.name})"
                     return false   // tgLastSentSession still points before session n: all of it is retried
                 }
@@ -364,6 +369,7 @@ class Telegram(context: Context) {
     companion object {
         private const val TAG = "Telegram"
         private const val MAX_QUEUE = 10
+        private const val MAX_AGE_MS = 6 * 60 * 60_000L   // saved alerts older than this are not sent
         private const val MAX_SESSIONS = 5   // CSV + raw each, so up to 10 files as before
         private const val MAX_SEEN = 20
         private const val MIN_BYTES = 3000L   // skip blank / no-adapter sessions

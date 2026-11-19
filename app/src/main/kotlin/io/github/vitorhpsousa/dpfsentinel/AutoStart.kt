@@ -37,7 +37,9 @@ object AutoStart {
         if (live.running) {
             // Already trying: a trigger means the car is probably here now, so the session that is
             // still looking for it must not give up on its old clock (opened at home, then driven off).
-            if (!live.connected || live.stale) LoggerService.extend(giveUpMs)
+            // Not for the adapter's own trigger: it re-appears every time the app lets go of it,
+            // which would keep a session beside a parked car alive all night.
+            if (!reason.startsWith("adapter") && (!live.connected || live.stale)) LoggerService.extend(giveUpMs)
             return ""
         }
         val fromAdapter = reason.startsWith("adapter")
