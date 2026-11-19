@@ -37,6 +37,8 @@ class MainActivity : ComponentActivity() {
             pendingStart = false
             if (requiredPermissions().all { result[it] == true || granted(it) }) startLogger()
             else Toast.makeText(this, "Bluetooth permission is needed to talk to the OBD adapter", Toast.LENGTH_LONG).show()
+        } else {
+            startOnOpen()   // first run: the permissions were just allowed
         }
     }
     private var pendingStart = false
@@ -60,6 +62,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // Opening the app is asking it to log: look for the car straight away, and give up after a few
+    // minutes if it isn't there (opened at home to read the logs). Not for a while after Stop.
+    private fun startOnOpen() {
+        if (LiveState.state.value.running || !Prefs(this).autoLog || LoggerService.stoppedRecently(this)) return
+        if (!requiredPermissions().all { granted(it) }) return
+        val stoppedAt = Prefs(this).stoppedAt
+        runCatching { LoggerService.start(this, giveUpMs = LoggerService.AUTO_GIVE_UP_MS) }
+        // start() clears the Stop time for a start by hand; this one is not by hand.
+        if (stoppedAt > 0L) Prefs(this).stoppedAt = stoppedAt
+    }
+
     private fun requestStart() {
         val wanted = (requiredPermissions() + optionalPermissions).distinct().toMutableList()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) wanted += Manifest.permission.POST_NOTIFICATIONS
@@ -75,10 +88,8 @@ class MainActivity : ComponentActivity() {
         (application as DpfApp).telegram.retry()   // alerts that could not be sent last time
         if (running && !LoggerService.gpsOn && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             runCatching { LoggerService.addGps(this) }
-        } else if (!running && Prefs(this).autoLog && !LoggerService.stoppedByUser && requiredPermissions().all { granted(it) }) {
-            // Opening the app is asking it to log: look for the car straight away, and give up
-            // after a few minutes if it isn't there (opened at home to read the logs).
-            runCatching { LoggerService.start(this, giveUpMs = LoggerService.AUTO_GIVE_UP_MS) }
+        } else {
+            startOnOpen()
         }
     }
 

@@ -30,7 +30,12 @@ class CarBluetoothReceiver : BroadcastReceiver() {
 // ask again. Never starts logging by itself.
 class RearmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        when (intent.action) {
+            // The daily alarm is set for a wall-clock time: set it again when the clock or zone changes.
+            Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_TIME_CHANGED -> { DailyWindow.schedule(context); return }
+            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED -> {}
+            else -> return
+        }
         AutoSetup.observe(context)
         DailyWindow.schedule(context)   // alarms do not survive a reboot
     }

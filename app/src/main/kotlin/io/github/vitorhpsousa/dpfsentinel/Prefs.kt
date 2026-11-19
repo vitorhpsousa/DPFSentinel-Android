@@ -106,6 +106,20 @@ class Prefs(context: Context) {
         get() = p.getString("carBtName", "") ?: ""
         set(v) = p.edit().putString("carBtName", v).apply()
 
+    /** Stop tapped by hand (wall-clock ms, 0 = not since the last start): no restart by itself for a while. */
+    var stoppedAt: Long
+        get() = p.getLong("stoppedAt", 0)
+        set(v) = p.edit().putLong("stoppedAt", v).apply()
+
+    /** Sessions in a row that never heard from the car, and when the last one ended (see TriggerBackoff). */
+    var emptySessions: Int
+        get() = p.getInt("emptySessions", 0)
+        set(v) = p.edit().putInt("emptySessions", v).apply()
+
+    var emptyEndedAt: Long
+        get() = p.getLong("emptyEndedAt", 0)
+        set(v) = p.edit().putLong("emptyEndedAt", v).apply()
+
     /** Last automatic start: wall-clock ms (0 = never) and "ok" or why it failed. */
     var autoLastTime: Long
         get() = p.getLong("autoLastTime", 0)

@@ -89,6 +89,7 @@ class LoggerService : Service() {
         } catch (e: Exception) {
             // Missing Bluetooth permission or a background start Android refused.
             Log.w(TAG, "startForeground refused", e)
+            if (running) return START_STICKY   // a session that is already logging carries on as it was
             gpsOn = false
             if (auto) AutoStart.failed(this, "Android refused the foreground service")
             stopSelf()
@@ -108,6 +109,7 @@ class LoggerService : Service() {
             autoSession = auto
             firstContactLimitMs = if (giveUp > 0L) giveUp else if (auto) AUTO_GIVE_UP_MS else 0L
             running = true
+            wakeLock?.let { if (it.isHeld) it.release() }   // never two: the older one would be held for hours
             wakeLock = getSystemService(PowerManager::class.java)
                 .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DpfSentinel:logger").apply { acquire(12 * 60 * 60 * 1000L) }
             stopReason = ""
@@ -142,7 +144,9 @@ class LoggerService : Service() {
         }
         val crashes = ArrayDeque<Long>()
         while (running) {
-            val crashed = loop()
+            // Anything thrown outside the loop's own handling (a full disk when opening the log file)
+            // counts as a crash too, instead of killing the app.
+            val crashed = try { loop() } catch (e: InterruptedException) { false } catch (e: Exception) { Log.e(TAG, "logger could not start", e); true }
             if (!running || !crashed) break
             val t = SystemClock.elapsedRealtime()
             crashes.addLast(t)
@@ -192,6 +196,8 @@ class LoggerService : Service() {
         var lastEvent = ""
         var lastAlert = ""
         var lastCarMs = 0L   // last row with any decoded PID; the session starts the clock
+        var adapterReached = false   // the adapter answered in this session (the car may still be asleep)
+        val t0Elapsed = t0
         var crashed = false
         var latest: Row? = null
         // The last row the car answered: stays on the screens (marked as old) once the link is gone.
@@ -299,6 +305,7 @@ class LoggerService : Service() {
                 return false
             }
             connectFails = 0
+            adapterReached = true
             startNotice.reset()   // a new connection: say so on Telegram once the car answers
             prefs.adapterAddress = dev.address
             prefs.adapterName = elm.name
@@ -313,9 +320,13 @@ class LoggerService : Service() {
                 // Parked, or walked off with the phone: give up rather than retry all night; the
                 // automatic start (adapter in range, car Bluetooth, Android Auto) brings it back
                 // next drive. An automatic start that never reached the car gives up sooner.
+                // A trigger that arrived while this session was still looking (AutoStart) restarts the clock.
+                val ext = extendAtElapsed.let { if (it > t0Elapsed) it - t0Elapsed else 0L }
                 val firstLimit = firstContactLimitMs
-                val idleLimit = if (firstLimit > 0L && lastCarMs == 0L) firstLimit else IDLE_STOP_MS
-                if (now - lastCarMs >= idleLimit) {
+                // The short limit is for "adapter never reached" only: once it answers, somebody is
+                // in the car (ignition on, engine not started yet), so wait the full time.
+                val idleLimit = if (firstLimit > 0L && lastCarMs == 0L && !adapterReached) maxOf(firstLimit, if (ext > 0L) extendLimitMs else 0L) else IDLE_STOP_MS
+                if (now - maxOf(lastCarMs, ext) >= idleLimit) {
                     stopReason = "Stopped: no data from the car for ${idleLimit / 60_000} min"
                     break
                 }
@@ -471,6 +482,9 @@ class LoggerService : Service() {
                 }
             }.onFailure { Log.w(TAG, "closing the open regen failed", it) }
             lastGood?.let { prefs.lastRow = it.encode(); prefs.lastRowAt = lastKnown.atMs; prefs.lastEstimate = lastEstimate }
+            // For AutoStart: a session that never heard the car makes the adapter trigger wait longer next time.
+            if (lastCarMs > 0L) prefs.emptySessions = 0
+            else if (!crashed) { prefs.emptySessions = prefs.emptySessions + 1; prefs.emptyEndedAt = System.currentTimeMillis() }
             elm.close()
             sensors.stop()
             session.close()
@@ -548,9 +562,23 @@ class LoggerService : Service() {
         private const val EXTRA_GIVE_UP = "giveUpMs"
         private const val EXTRA_ADD_GPS = "addGps"
 
-        /** Stop was tapped: opening the app again does not restart logging until Start is tapped. */
-        @Volatile var stoppedByUser = false
-            private set
+        /** After Stop is tapped, opening the app does not restart logging for this long (Start always does). */
+        const val STOP_HOLDS_MS = 30 * 60_000L
+
+        fun stoppedRecently(context: Context): Boolean {
+            val at = Prefs(context).stoppedAt
+            val now = System.currentTimeMillis()
+            return at > 0L && now >= at && now - at < STOP_HOLDS_MS
+        }
+
+        // A trigger while a session is still looking for the car: when (elapsedRealtime) and for how long.
+        @Volatile private var extendAtElapsed = 0L
+        @Volatile private var extendLimitMs = 0L
+
+        fun extend(giveUpMs: Long) {
+            extendLimitMs = maxOf(giveUpMs, AUTO_GIVE_UP_MS)
+            extendAtElapsed = SystemClock.elapsedRealtime()
+        }
         private const val CRASH_WINDOW_MS = 10 * 60_000L
         private const val MAX_CRASHES = 3
 
@@ -570,7 +598,7 @@ class LoggerService : Service() {
          * [giveUpMs] > 0: stop if the car has not answered once within that time.
          */
         fun start(context: Context, auto: Boolean = false, giveUpMs: Long = 0L) {
-            stoppedByUser = false
+            if (!auto) Prefs(context).stoppedAt = 0L
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, LoggerService::class.java).putExtra(EXTRA_AUTO, auto).putExtra(EXTRA_GIVE_UP, giveUpMs),
@@ -583,7 +611,7 @@ class LoggerService : Service() {
         }
 
         fun stop(context: Context) {
-            stoppedByUser = true
+            Prefs(context).stoppedAt = System.currentTimeMillis()
             context.stopService(Intent(context, LoggerService::class.java))
         }
     }

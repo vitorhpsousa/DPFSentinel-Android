@@ -27,6 +27,8 @@
     <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
     <uses-permission android:name="android.permission.REQUEST_COMPANION_RUN_IN_BACKGROUND" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- "Look for the car every day at HH:MM": on time only with this, which the user allows in Settings. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true" />
     <uses-feature android:name="android.software.companion_device_setup" android:required="false" />
@@ -90,6 +92,8 @@
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
             </intent-filter>
         </receiver>
 

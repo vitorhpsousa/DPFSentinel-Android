@@ -179,12 +179,25 @@ fun AutoLogCard() {
                     "the same time every day. Needs Battery: Unrestricted, or the adapter linked.",
                 color = Muted, fontSize = 12.sp,
             )
+            if (dailyOn && !DailyWindow.canBeExact(ctx)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) { Check(false, "Daily time may run late") }
+                    TextButton(onClick = {
+                        runCatching {
+                            ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, android.net.Uri.fromParts("package", ctx.packageName, null)))
+                        }
+                        tick++
+                    }) { Text("Allow exact time") }
+                }
+                Text("Android delays this kind of alarm while the phone sleeps unless \"Alarms & reminders\" is allowed for DPF Sentinel.", color = Muted, fontSize = 12.sp)
+            }
             if (message.isNotEmpty()) Text(message, color = Amber, fontSize = 12.sp)
             if (st.last.isNotEmpty()) Text("Last automatic start: ${st.last}", color = Muted, fontSize = 12.sp)
         }
     }
     Text(
-        "Logging starts when you open the app, when the car's Bluetooth connects, when the linked adapter comes near, and at the daily time if set. " +
+        "Logging starts when you open the app (phone or car screen), when the car's Bluetooth connects, when the linked adapter comes near, and at the daily time if set. " +
+            "Plugging into Android Auto alone does not start it. " +
             "GPS is only added when you open the app.",
         color = Muted, fontSize = 12.sp,
     )
