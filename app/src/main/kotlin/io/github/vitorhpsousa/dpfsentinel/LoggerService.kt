@@ -45,6 +45,8 @@ class LoggerService : Service() {
     @Volatile private var stopReason = ""
     // Started by AutoStart (or restarted by Android) rather than by the user: gives up sooner.
     @Volatile private var autoSession = false
+    // What started this session, for the Telegram message: "by itself", "when the app was opened", "by hand".
+    @Volatile private var startedHow = "by hand"
     // How long to keep trying before the car has answered once (0 = the normal idle limit).
     @Volatile private var firstContactLimitMs = 0L
     private var worker: Thread? = null
@@ -94,10 +96,13 @@ class LoggerService : Service() {
         }
         AutoStart.clearNotification(this)
         val giveUp = intent?.getLongExtra(EXTRA_GIVE_UP, 0L) ?: 0L
-        if (!auto) autoSession = false
-        // A plain Start (the button, or the app coming on screen during a session) waits the full time.
-        if (running && !auto && giveUp == 0L) firstContactLimitMs = 0L
+        // The app coming on screen during a session only adds GPS: it is not a new start by hand.
+        val addGps = intent?.getBooleanExtra(EXTRA_ADD_GPS, false) ?: false
+        if (!auto && !addGps) autoSession = false
+        // A plain Start (the button) waits the full time.
+        if (running && !auto && !addGps && giveUp == 0L) { firstContactLimitMs = 0L; startedHow = "by hand" }
         if (!running) {
+            startedHow = if (auto) "by itself" else if (giveUp > 0L) "when the app was opened" else "by hand"
             // Straight away, so the screens don't offer Start again while the worker gets going.
             LiveState.update { it.copy(running = true, status = "Starting…") }
             autoSession = auto
@@ -171,6 +176,7 @@ class LoggerService : Service() {
         val zone = SootZone()
         val idleWatch = IdleBlockageWatch()
         val startNotice = StartNotice()
+        var noticesSent = 0   // connect messages queued in this session
         val history = ArrayDeque<HistoryPoint>()
         val sensors = PhoneSensors(this).also { it.start() }
         val grade = GradeTracker()
@@ -325,6 +331,17 @@ class LoggerService : Service() {
                         // The notification must not keep saying "Soot 12.3 g" while the link is down.
                         if (!elm.connected()) notifyLive(status, searching = true)
                     }
+                    // Telegram keeps working while the adapter is out of reach: waiting alerts are
+                    // retried and /status gets its "car off or adapter out of range" answer.
+                    if (now - lastTelegram >= 15_000) {
+                        lastTelegram = now
+                        val u = prefs.units
+                        telegram.tick(
+                            statusText = { Messages.status(LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")), null, "--", u) },
+                            latestLine = Messages.latestLine(lastGood, u),
+                            currentSession = session.number,
+                        )
+                    }
                     Thread.sleep(200)
                     continue
                 }
@@ -389,14 +406,17 @@ class LoggerService : Service() {
                 // Not counted while Telegram is off, so setting it up mid-drive still gets the message.
                 if (prefs.tgStartNotice && telegram.enabled && startNotice.due(now, row.anyPid(), !row.soot.isNaN())) {
                     val wallMs = System.currentTimeMillis()
-                    if (StartNotice.allowed(wallMs, prefs.tgLastStartNotice)) {
+                    // The first one of a session always goes; the gap only quietens a link that keeps dropping.
+                    if (noticesSent == 0 || StartNotice.allowed(wallMs, prefs.tgLastStartNotice)) {
                         prefs.tgLastStartNotice = wallMs
                         telegram.event(
                             Messages.loggingStarted(
-                                LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")), session.number, autoSession,
-                                row, Messages.estimate(health.state, prefs.units), prefs.units,
+                                LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm")), session.number, startedHow,
+                                noticesSent > 0, row, Messages.estimate(health.state, prefs.units), prefs.units,
                             ),
+                            low = true,
                         )
+                        noticesSent++
                     }
                 }
                 blankRows = if (row.anyPid()) 0 else blankRows + 1
@@ -526,6 +546,7 @@ class LoggerService : Service() {
         const val AUTO_GIVE_UP_MS = 3 * 60_000L
         private const val EXTRA_AUTO = "auto"
         private const val EXTRA_GIVE_UP = "giveUpMs"
+        private const val EXTRA_ADD_GPS = "addGps"
 
         /** Stop was tapped: opening the app again does not restart logging until Start is tapped. */
         @Volatile var stoppedByUser = false
@@ -554,6 +575,11 @@ class LoggerService : Service() {
                 context,
                 Intent(context, LoggerService::class.java).putExtra(EXTRA_AUTO, auto).putExtra(EXTRA_GIVE_UP, giveUpMs),
             )
+        }
+
+        /** The app is on screen during a running session: restart the service type so GPS is logged too. */
+        fun addGps(context: Context) {
+            ContextCompat.startForegroundService(context, Intent(context, LoggerService::class.java).putExtra(EXTRA_ADD_GPS, true))
         }
 
         fun stop(context: Context) {

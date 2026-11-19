@@ -71,7 +71,7 @@ class StartNoticeTest {
     @Test fun `message with readings`() {
         val r = row("dpf_soot_level_g" to 12.34, "dpf_dist_since_regen_mi" to 45.6, "dpf_diff_pressure_hpa" to 18.0,
             "egt_before_dpf_c" to 210.0, "control_module_v" to 14.2)
-        val m = Messages.loggingStarted("08:15", 124, auto = true, row = r, estimate = "~60 mi")
+        val m = Messages.loggingStarted("08:15", 124, "by itself", reconnect = false, row = r, estimate = "~60 mi")
         val lines = m.lines()
         assertEquals("DPF Sentinel is logging, 08:15 (session 124, started by itself)", lines[0])
         assertEquals(4, lines.size)
@@ -82,8 +82,18 @@ class StartNoticeTest {
     }
 
     @Test fun `message without a soot reading has no numbers`() {
-        val m = Messages.loggingStarted("08:15", 7, auto = false, row = row("engine_rpm" to 800.0), estimate = "--")
+        val m = Messages.loggingStarted("08:15", 7, "by hand", reconnect = false, row = row("engine_rpm" to 800.0), estimate = "--")
         assertEquals("DPF Sentinel is logging, 08:15 (session 7, started by hand)\nConnected to the car; no filter reading yet.", m)
-        assertEquals(m, Messages.loggingStarted("08:15", 7, auto = false, row = null, estimate = "--"))
+        assertEquals(m, Messages.loggingStarted("08:15", 7, "by hand", reconnect = false, row = null, estimate = "--"))
+    }
+
+    @Test fun `a later connection in the same session reads as a reconnection`() {
+        val m = Messages.loggingStarted("08:40", 7, "by itself", reconnect = true, row = null, estimate = "--")
+        assertEquals("DPF Sentinel reconnected to the car, 08:40 (session 7)", m.lines()[0])
+        assertEquals("when the app was opened" in Messages.loggingStarted("08:40", 7, "when the app was opened", false, null, "--"), true)
+    }
+
+    @Test fun `a shared bot token is named as the problem`() {
+        assertEquals(TelegramLogic.SHARED_BOT, TelegramLogic.describeError(409, """{"ok":false,"error_code":409,"description":"Conflict: terminated by other getUpdates request"}"""))
     }
 }

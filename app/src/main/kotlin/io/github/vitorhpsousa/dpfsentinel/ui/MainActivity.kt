@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
 import io.github.vitorhpsousa.dpfsentinel.LiveState
+import io.github.vitorhpsousa.dpfsentinel.DpfApp
 import io.github.vitorhpsousa.dpfsentinel.LoggerService
 import io.github.vitorhpsousa.dpfsentinel.Prefs
 
@@ -71,8 +72,9 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         val running = LiveState.state.value.running
+        (application as DpfApp).telegram.retry()   // alerts that could not be sent last time
         if (running && !LoggerService.gpsOn && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            runCatching { LoggerService.start(this) }
+            runCatching { LoggerService.addGps(this) }
         } else if (!running && Prefs(this).autoLog && !LoggerService.stoppedByUser && requiredPermissions().all { granted(it) }) {
             // Opening the app is asking it to log: look for the car straight away, and give up
             // after a few minutes if it isn't there (opened at home to read the logs).

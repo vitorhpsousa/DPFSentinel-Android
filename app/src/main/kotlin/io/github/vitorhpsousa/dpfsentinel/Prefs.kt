@@ -59,6 +59,11 @@ class Prefs(context: Context) {
         get() = p.getLong("tgStartMsgAt", 0)
         set(v) = p.edit().putLong("tgStartMsgAt", v).apply()
 
+    /** Alerts not delivered yet (JSON array), so they survive the app being closed while offline. */
+    var tgQueue: String
+        get() = p.getString("tgQueue", "") ?: ""
+        set(v) = p.edit().putString("tgQueue", v).apply()
+
     var tgUpdateOffset: Long
         get() = p.getLong("tgOffset", 0)
         set(v) = p.edit().putLong("tgOffset", v).apply()
