@@ -98,7 +98,7 @@ fun TelegramCard(s: Snapshot, units: Units) {
     }) { Text("Find my chat") }
     if (found.isNotEmpty()) Text(found, fontSize = 12.sp)
     choices.forEach { c ->
-        TextButton(onClick = { chat = c.id.toString(); found = "Found: ${Telegram.label(c)}"; choices = emptyList() }) {
+        TextButton(onClick = { chat = c.id.toString(); found = "Found: ${Telegram.label(c)}. Now tap Send test: that checks it and saves it"; choices = emptyList() }) {
             Text("${Telegram.label(c)} · ${c.id}")
         }
     }

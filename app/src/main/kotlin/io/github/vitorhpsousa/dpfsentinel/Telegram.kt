@@ -27,7 +27,10 @@ class Telegram(context: Context) {
     private val ctx = context.applicationContext
     private val prefs = Prefs(ctx)
     private val exec = Executors.newSingleThreadExecutor()
-    private val queue = ArrayDeque<String>()
+    // Waiting alerts, oldest first. A "low" one (the connect message) is the first to go when full,
+    // so it can never push out a regen or health alert. Saved to prefs on every change.
+    private class Item(val text: String, val low: Boolean, val atMs: Long = System.currentTimeMillis())
+    private val queue = ArrayDeque<Item>()
     private var lastPollMs = 0L
     private var retryAfterMs = 0L        // next try of a failed daily report
     private var quietUntilMs = 0L        // Telegram said "too many requests": nothing automatic before this
@@ -45,17 +48,55 @@ class Telegram(context: Context) {
         val ok get() = code == 200 && body.contains("\"ok\":true")
         /** Refused for good (bad token, unknown chat, malformed): sending the same thing again cannot work. */
         val permanent get() = code in 400..499 && code != 429
+        /** The file itself was refused (too big): the same upload cannot work later, but others can. */
+        val fileRefused get() = code == 413 || (code == 400 && body.contains("too", ignoreCase = true) && body.contains("file", ignoreCase = true))
         fun error() = TelegramLogic.describeError(code, body)
     }
 
-    /** Queue a one-off alert; sent as soon as possible. */
-    fun event(text: String) {
+    init {
+        // Alerts left over from last time (phone was offline when logging stopped): send them now.
+        runCatching {
+            val saved = prefs.tgQueue
+            if (saved.isNotEmpty()) {
+                val a = org.json.JSONArray(saved)
+                synchronized(queue) {
+                    for (i in 0 until a.length()) {
+                        val o = a.getJSONObject(i)
+                        // "Keep driving 10 more minutes" is worse than nothing a day later.
+                        val at = o.optLong("at", 0L)
+                        val age = System.currentTimeMillis() - at
+                        if (age in 0..MAX_AGE_MS) queue.addLast(Item(o.getString("t"), o.optBoolean("low", false), at))
+                    }
+                }
+            }
+        }
+        if (enabled) exec.execute { drain() }
+    }
+
+    // Call with the queue lock held.
+    private fun saveQueue() {
+        val a = org.json.JSONArray()
+        for (i in queue) a.put(JSONObject().put("t", i.text).put("low", i.low).put("at", i.atMs))
+        prefs.tgQueue = if (queue.isEmpty()) "" else a.toString()
+    }
+
+    /** Queue a one-off alert; sent as soon as possible. [low]: dropped first when the queue is full. */
+    fun event(text: String, low: Boolean = false) {
         if (!enabled) return
         synchronized(queue) {
-            if (queue.size >= MAX_QUEUE) queue.removeFirst()
-            queue.addLast(text)
+            if (queue.size >= MAX_QUEUE) {
+                val victim = queue.firstOrNull { it.low } ?: queue.first()
+                queue.remove(victim)
+            }
+            queue.addLast(Item(text, low))
+            saveQueue()
         }
         exec.execute { drain() }
+    }
+
+    /** Try the waiting alerts again (the app came on screen, or signal may be back). */
+    fun retry() {
+        if (enabled) exec.execute { drain() }
     }
 
     /**
@@ -125,9 +166,10 @@ class Telegram(context: Context) {
                     0 -> if (TelegramLogic.normaliseChatId(typedChat) != null) {
                         "No new message to read, but a recipient ID is already filled in: tap Send test to check it"
                     } else {
-                        "Telegram only shows messages the app hasn't read yet. Send your bot a new message now, then tap Find my chat again"
+                        "Telegram only shows messages nobody has read yet. Send your bot a new message now, then tap Find my chat again. " +
+                            "If the DPF board uses the same bot token it reads them first: give the phone its own bot from @BotFather"
                     }
-                    1 -> "Found: ${label(found[0])}"
+                    1 -> "Found: ${label(found[0])}. Now tap Send test: that checks it and saves it"
                     else -> "Several chats wrote to this bot. Pick yours:"
                 },
             )
@@ -140,7 +182,7 @@ class Telegram(context: Context) {
         while (true) {
             if (System.currentTimeMillis() < quietUntilMs) return
             val msg = synchronized(queue) { queue.peekFirst() } ?: return
-            val r = sendMessage(msg)
+            val r = sendMessage(msg.text)
             if (!r.ok) {
                 lastResult = r.error()
                 // Offline or rate-limited: stays queued, retried on the next tick. Refused for good:
@@ -148,7 +190,7 @@ class Telegram(context: Context) {
                 if (!r.permanent) return
                 Log.w(TAG, "alert dropped: Telegram refused it (${r.code})")
             }
-            synchronized(queue) { if (queue.peekFirst() === msg) queue.removeFirst() }
+            synchronized(queue) { if (queue.remove(msg)) saveQueue() }
         }
     }
 
@@ -198,25 +240,32 @@ class Telegram(context: Context) {
             }
             if (!force) summarySentFor = day
         }
+        var refused = 0
         for ((n, group) in groups) {
             for (f in group) {
+                drain()   // a regen or connect message never waits behind the uploads
+                if (f.length() == 0L) continue
                 val r = sendDocument(f, "${f.name} (${Messages.fmtBytes(f.length())})")
                 if (!r.ok) {
+                    // Refused for good (too big, say): trying again cannot work, and it would hold
+                    // back every later session. Skip that one file.
+                    if (r.fileRefused) { refused++; Log.w(TAG, "upload refused for good (${r.code}): ${f.name}"); continue }
                     lastResult = "${r.error()} (${f.name})"
                     return false   // tgLastSentSession still points before session n: all of it is retried
                 }
             }
             prefs.tgLastSentSession = n
         }
-        prefs.tgLastReportDay = day
+        // "Report now" is extra: the day's own report still goes out at its time.
+        if (!force) prefs.tgLastReportDay = day
         summarySentFor = NO_DAY
-        lastResult = "sent ${files.size} file(s) at $date" + if (left > 0) ", $left older session(s) follow with the next report" else ""
+        lastResult = "sent ${files.size - refused} file(s) at $date" + (if (refused > 0) ", $refused refused by Telegram (too big?)" else "") + if (left > 0) ", $left older session(s) follow with the next report" else ""
         return true
     }
 
     private fun pollCommands(statusText: () -> String) {
         val token = prefs.tgToken
-        val r = request(token, "getUpdates?offset=${prefs.tgUpdateOffset}&timeout=0&limit=5", null)
+        val r = request(token, "getUpdates?offset=${prefs.tgUpdateOffset}&timeout=0&limit=100", null)
         if (!r.ok) return
         // Every update is confirmed, also those without a message (joins, edits of other kinds).
         val next = runCatching {
@@ -320,6 +369,7 @@ class Telegram(context: Context) {
     companion object {
         private const val TAG = "Telegram"
         private const val MAX_QUEUE = 10
+        private const val MAX_AGE_MS = 6 * 60 * 60_000L   // saved alerts older than this are not sent
         private const val MAX_SESSIONS = 5   // CSV + raw each, so up to 10 files as before
         private const val MAX_SEEN = 20
         private const val MIN_BYTES = 3000L   // skip blank / no-adapter sessions

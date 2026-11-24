@@ -12,6 +12,8 @@ object Messages {
         "If you've arrived, it's fine to switch off."
     const val REGEN_END = "Filter cleaning finished. Nothing to do."
     const val REGEN_INTERRUPTED = "Filter cleaning was cut short. It will try again on the next drive."
+    /** Logging stopped (Stop, phone left the car) with a regen still open: nobody saw how it ended. */
+    const val REGEN_UNSEEN_END = "Logging stopped while the filter was still cleaning, so it is not known whether it finished."
     const val REGEN_PAUSED = "Filter cleaning is on hold."
     const val REGEN_RESUMED = "Filter cleaning carried on."
     const val REGEN_TICK = "Filter cleaning in progress."
@@ -42,11 +44,13 @@ object Messages {
     }
 
     /**
-     * Sent each time the app connects to the adapter and the car answers: proof that it is working, with the first readings.
-     * [auto] = nobody tapped Start (the app woke itself).
+     * Sent each time the app connects to the adapter and the car answers: proof that it is working,
+     * with the first readings. [how] says what started the session ("by itself", "when the app was
+     * opened", "by hand"); [reconnect] = not the first connection of this session.
      */
-    fun loggingStarted(time: String, session: Int, auto: Boolean, row: Row?, estimate: String, u: Units = Units.UK): String {
-        val head = "DPF Sentinel is logging, $time (session $session, ${if (auto) "started by itself" else "started by hand"})"
+    fun loggingStarted(time: String, session: Int, how: String, reconnect: Boolean, row: Row?, estimate: String, u: Units = Units.UK): String {
+        val head = if (reconnect) "DPF Sentinel reconnected to the car, $time (session $session)"
+        else "DPF Sentinel is logging, $time (session $session, started $how)"
         if (row == null || row.soot.isNaN()) return "$head\nConnected to the car; no filter reading yet."
         return "$head\n" +
             "soot ${n(row.soot, 1)} g, ${u.distance(row.sinceRegen, 1)} since regen\n" +

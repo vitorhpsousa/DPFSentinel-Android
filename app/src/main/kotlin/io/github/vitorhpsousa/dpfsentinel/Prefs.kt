@@ -59,6 +59,11 @@ class Prefs(context: Context) {
         get() = p.getLong("tgStartMsgAt", 0)
         set(v) = p.edit().putLong("tgStartMsgAt", v).apply()
 
+    /** Alerts not delivered yet (JSON array), so they survive the app being closed while offline. */
+    var tgQueue: String
+        get() = p.getString("tgQueue", "") ?: ""
+        set(v) = p.edit().putString("tgQueue", v).apply()
+
     var tgUpdateOffset: Long
         get() = p.getLong("tgOffset", 0)
         set(v) = p.edit().putLong("tgOffset", v).apply()
@@ -101,6 +106,30 @@ class Prefs(context: Context) {
         get() = p.getString("carBtName", "") ?: ""
         set(v) = p.edit().putString("carBtName", v).apply()
 
+    /** The soot zone last alerted (0 none, 1 rising, 2 high), so each drive doesn't repeat it. */
+    var sootZone: Int
+        get() = p.getInt("sootZone", 0)
+        set(v) = p.edit().putInt("sootZone", v).apply()
+
+    /** Say regen alerts out loud (through the car's speakers when the phone plays through them). */
+    var speakAlerts: Boolean
+        get() = p.getBoolean("speak", true)
+        set(v) = p.edit().putBoolean("speak", v).apply()
+
+    /** Stop tapped by hand (wall-clock ms, 0 = not since the last start): no restart by itself for a while. */
+    var stoppedAt: Long
+        get() = p.getLong("stoppedAt", 0)
+        set(v) = p.edit().putLong("stoppedAt", v).apply()
+
+    /** Sessions in a row that never heard from the car, and when the last one ended (see TriggerBackoff). */
+    var emptySessions: Int
+        get() = p.getInt("emptySessions", 0)
+        set(v) = p.edit().putInt("emptySessions", v).apply()
+
+    var emptyEndedAt: Long
+        get() = p.getLong("emptyEndedAt", 0)
+        set(v) = p.edit().putLong("emptyEndedAt", v).apply()
+
     /** Last automatic start: wall-clock ms (0 = never) and "ok" or why it failed. */
     var autoLastTime: Long
         get() = p.getLong("autoLastTime", 0)
@@ -114,6 +143,11 @@ class Prefs(context: Context) {
     var lastRow: String
         get() = p.getString("lastRow", "") ?: ""
         set(v) = p.edit().putString("lastRow", v).apply()
+
+    /** The next-regen text that went with the last reading ("~42 mi"), "" = none yet. */
+    var lastEstimate: String
+        get() = p.getString("lastEst", "") ?: ""
+        set(v) = p.edit().putString("lastEst", v).apply()
 
     var lastRowAt: Long
         get() = p.getLong("lastRowAt", 0)

@@ -68,6 +68,13 @@ Opening the app on the car starts logging when *Settings → Start logging when 
 Sentinel* is on. Some Android versions refuse to start a background service from the car screen alone;
 if the car shows "Start logging from the phone app", tap Start on the phone once.
 
+## Spoken alerts
+
+*Settings → Spoken alerts*: during a regeneration the phone says "Filter cleaning started", "halfway" (about 11 g of soot,
+7 minutes left), "nearly done" (about 7 g) and "finished", using the phone's own text-to-speech. It plays like sat-nav
+guidance: through the car when the phone is on Android Auto or the car is on Bluetooth audio, pausing music. **Test voice**
+says a sample. The milestones are this car's own (ix35 1.7 CRDi: 15-minute regens, 18 g down to about 4.7 g).
+
 ## Telegram
 
 *Settings → Telegram*: create a bot with @BotFather in Telegram, paste its token, send your bot any message, then tap

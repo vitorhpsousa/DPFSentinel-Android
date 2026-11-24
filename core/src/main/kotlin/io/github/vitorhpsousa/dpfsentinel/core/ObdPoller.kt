@@ -42,8 +42,14 @@ class ObdPoller(private val elm: ElmTransport, private val raw: (header: String,
         for (s in listOf("ATE0", "ATL0", "ATH1", "ATS0", "ATSP6", "ATST32")) {
             if (elm.send(s).isEmpty()) return false
         }
-        for (r in reqs) { r.nextDue = nowMs; r.fails = 0 }
+        // A new link: nothing read over the old one may show up in a row as if it were fresh.
+        for (r in reqs) { r.nextDue = nowMs; r.fails = 0; r.lastGood = -1L; r.payload = IntArray(0) }
         return true
+    }
+
+    /** The car started answering after a silence: every request is due now, backed-off ones included. */
+    fun retryAll(nowMs: Long) {
+        for (r in reqs) { r.nextDue = nowMs; r.fails = 0 }
     }
 
     private fun setHeader(header: String): Boolean {
@@ -105,8 +111,9 @@ class ObdPoller(private val elm: ElmTransport, private val raw: (header: String,
 }
 
 // Soot beeps/notifications: amber >= 14 g, red >= 17 g, with 0.5 g hysteresis so it doesn't chatter.
-class SootZone {
-    var zone = 0
+class SootZone(start: Int = 0) {
+    /** [start]: the zone already reported on an earlier drive, so it is not reported again on every start. */
+    var zone = start.coerceIn(0, 2)
         private set
 
     /** Returns the new zone when it rose (1 amber, 2 red), else null. */

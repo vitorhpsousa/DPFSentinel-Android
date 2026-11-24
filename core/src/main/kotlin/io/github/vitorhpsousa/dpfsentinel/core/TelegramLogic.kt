@@ -81,6 +81,8 @@ object TelegramLogic {
      * @return one sentence to show the user. Known causes get an instruction; anything else gets
      *   Telegram's own description, or "Telegram error <code>" when there is none.
      */
+    const val SHARED_BOT = "Another device is using this bot token (the DPF board?). Make a second bot in @BotFather and give the phone its own token"
+
     fun describeError(httpCode: Int, body: String?): String {
         if (httpCode <= 0) return "No internet connection"
         val root = MiniJson.parse(body) as? Map<*, *>
@@ -93,6 +95,7 @@ object TelegramLogic {
             httpCode == 403 && "blocked" in d -> "You blocked the bot — unblock it in Telegram"
             (httpCode == 400 && "chat not found" in d) || (httpCode == 403 && "initiate conversation" in d) ->
                 "Open your bot in Telegram and press Start, then try again"
+            httpCode == 409 -> SHARED_BOT
             httpCode == 429 -> {
                 val wait = ((root?.get("parameters") as? Map<*, *>)?.get("retry_after") as? MiniJson.Num)?.long
                     ?: Regex("retry after (\\d+)").find(d)?.groupValues?.get(1)?.toLongOrNull()

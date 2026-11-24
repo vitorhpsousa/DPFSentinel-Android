@@ -87,13 +87,16 @@ class LiveScreen(carContext: CarContext) : Screen(carContext) {
 
     /** (title, text) per row, most important first. */
     private fun rows(s: Snapshot): List<Pair<String, String>> {
-        val r = s.row
+        // Same rule as the phone: not live = the last reading, said so, without the coloured dot.
+        val old = isOld(s)
+        val r = if (old) s.lastRow else s.row
         val u = prefs.units
         val soot = r?.soot ?: Double.NaN
         val zoneWord = when (s.sootZone) { 2 -> "HIGH"; 1 -> "rising"; else -> "OK" }
         val out = ArrayList<Pair<String, String>>()
+        val at = if (old) java.text.SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(java.util.Date(s.lastRowAtMs)) else ""
         val sootRow = Pair(
-            if (soot.isNaN()) "Soot --" else "Soot ${n(soot, 1)} g · $zoneWord",
+            if (soot.isNaN()) "Soot --" else if (old) "Soot ${n(soot, 1)} g · last reading, $at" else "Soot ${n(soot, 1)} g · $zoneWord",
             if (s.triggerG.isNaN()) "" else "This car regenerates at about ${n(s.triggerG, 1)} g",
         )
         // During a regen its message leads, in the same words as the phone and the notifications
@@ -116,9 +119,11 @@ class LiveScreen(carContext: CarContext) : Screen(carContext) {
         // An automatic start that failed since this screen opened (AutoStart records why).
         val autoFailed = !s.running && prefs.autoLastTime >= openedAt && !prefs.autoLastResult.startsWith("ok")
         out += if (autoFailed) Pair("Logging didn't start by itself", "Tap Start logging, or open DPF Sentinel on the phone once")
-        else Pair(if (s.running) s.status else "Not logging", if (s.running && s.idleBlockage) "High DPF pressure at idle" else "")
+        else Pair(s.status, if (s.running && s.idleBlockage) "High DPF pressure at idle" else "")
         return out
     }
+
+    private fun isOld(s: Snapshot) = (s.row == null || s.stale) && s.lastRow != null && s.lastRowAtMs > 0
 
     private fun zoneColor(z: Int): CarColor = when (z) { 2 -> CarColor.RED; 1 -> CarColor.YELLOW; else -> CarColor.GREEN }
 
@@ -132,7 +137,7 @@ class LiveScreen(carContext: CarContext) : Screen(carContext) {
         rows(s).take(limit.coerceAtLeast(1)).forEach { (title, text) ->
             val b = Row.Builder().setTitle(title)
             if (text.isNotEmpty()) b.addText(text)
-            if (title.startsWith("Soot ") && s.row != null && !s.row.soot.isNaN()) {
+            if (title.startsWith("Soot ") && !isOld(s) && s.row != null && !s.row.soot.isNaN()) {
                 b.setImage(CarIcon.Builder(IconCompat.createWithResource(carContext, R.drawable.ic_dot)).setTint(zoneColor(s.sootZone)).build())
             }
             pane.addRow(b.build())

@@ -138,6 +138,9 @@ fun SettingsTab(s: Snapshot) {
         )
 
         HorizontalDivider()
+        VoiceCard()
+
+        HorizontalDivider()
         TelegramCard(s, units)
 
         HorizontalDivider()
@@ -166,7 +169,7 @@ fun SettingsTab(s: Snapshot) {
 
         HorizontalDivider()
         Text("Dash mileage", fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        val ecu = s.row?.odometer ?: Double.NaN
+        val ecu = (s.row?.odometer ?: Double.NaN).let { if (it.isNaN()) s.lastRow?.odometer ?: Double.NaN else it }
         Text(
             "The dash and the ECU often count separately. With the engine running, type the dash mileage once; " +
                 "the offset is used for display only, never written to the logs. Current offset: ${units.distance(prefs.odometerOffsetMi.toDouble(), 1)}.",

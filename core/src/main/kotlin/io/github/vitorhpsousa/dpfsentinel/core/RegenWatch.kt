@@ -86,16 +86,19 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val 
     private fun emptyFilter() = haveSoot && lastSoot <= EMPTY_SOOT_G   // unknown soot never counts as empty
 
     // Closes the open regen. endMs: when it stopped burning (the flag drop, or the last data).
-    private fun close(type: RegenEvent.Type, endMs: Long, wallClock: Double, why: String = ""): RegenEvent {
+    private fun close(type: RegenEvent.Type, endMs: Long, wallClock: Double, why: String = "", headline: String? = null): RegenEvent {
         inRegen = false
         isPaused = false
         activeStreak = 0
         inactiveStreak = 0
         val mins = (endMs - startMs).coerceAtLeast(0) / 60000
         val sootNow = soot()
-        val tail = "peak EGT ${units().temp(peakEgt)}, soot ${fmt(sootStart, 1)} g -> ${Units.num(sootNow, 1)} g" + clock(wallClock)
+        val tail = "peak EGT ${units().temp(peakEgt)}, soot ${Units.num(sootStart, 1)} g -> ${Units.num(sootNow, 1)} g" + clock(wallClock)
         return if (type == RegenEvent.Type.END) event(type, "took about $mins min, $tail")
-        else event(type, "ran about $mins min${if (why.isEmpty()) "" else " ($why)"}, $tail")
+        else {
+            val detail = "ran about $mins min${if (why.isEmpty()) "" else " ($why)"}, $tail"
+            if (headline == null) event(type, detail) else RegenEvent(type, headline + "\n" + detail)
+        }
     }
 
     private fun closeByFilter(endMs: Long, wallClock: Double, why: String) =
@@ -108,7 +111,11 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val 
      */
     fun finish(nowMs: Long, wallClock: Double): RegenEvent {
         if (!inRegen) return RegenEvent.NONE
-        return closeByFilter(if (isPaused) pausedAtMs else lastValidMs, wallClock, "logging stopped while it was running")
+        val endMs = if (isPaused) pausedAtMs else lastValidMs
+        // The car's own "finished" signal was seen: finished. Otherwise nobody saw the end, which is
+        // not the same as "cut short" (the engine may still be running and finishing it).
+        return if (resetSeen || emptyFilter()) close(RegenEvent.Type.END, endMs, wallClock)
+        else close(RegenEvent.Type.INTERRUPTED, endMs, wallClock, "logging stopped while it was running", Messages.REGEN_UNSEEN_END)
     }
 
     /**
@@ -195,13 +202,14 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val 
             startMs = nowMs
             lastTickMs = nowMs
             peakEgt = if (egtC.isNaN()) 0.0 else egtC
-            sootStart = if (soot.isNaN()) 0.0 else soot
+            sootStart = soot   // NaN when not read yet: printed as "--"
             val distStart = if (distMi.isNaN()) 0.0 else distMi
             startWall = wallClock
             return event(
                 RegenEvent.Type.START,
-                "soot ${fmt(sootStart, 1)} g, ${units().distance(distStart, 1)} since the last regen, " +
-                    "EGT ${units().temp(if (egtC.isNaN()) 0.0 else egtC)}" + pressure(pressureHpa) + clock(startWall),
+                // A value not read yet prints as "--", never as an invented 0.
+                "soot ${Units.num(soot, 1)} g, ${units().distance(distMi, 1)} since the last regen, " +
+                    "EGT ${units().temp(egtC)}" + pressure(pressureHpa) + clock(startWall),
             )
         }
         if (inRegen && inactiveStreak >= STREAK_ROWS) {
