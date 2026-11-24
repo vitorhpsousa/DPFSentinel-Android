@@ -111,6 +111,11 @@ class Prefs(context: Context) {
         get() = p.getInt("sootZone", 0)
         set(v) = p.edit().putInt("sootZone", v).apply()
 
+    /** Say regen alerts out loud (through the car's speakers when the phone plays through them). */
+    var speakAlerts: Boolean
+        get() = p.getBoolean("speak", true)
+        set(v) = p.edit().putBoolean("speak", v).apply()
+
     /** Stop tapped by hand (wall-clock ms, 0 = not since the last start): no restart by itself for a while. */
     var stoppedAt: Long
         get() = p.getLong("stoppedAt", 0)

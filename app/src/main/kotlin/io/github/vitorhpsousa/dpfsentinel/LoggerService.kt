@@ -28,6 +28,7 @@ import io.github.vitorhpsousa.dpfsentinel.core.PhoneColumns
 import io.github.vitorhpsousa.dpfsentinel.core.ObdPoller
 import io.github.vitorhpsousa.dpfsentinel.core.Pids
 import io.github.vitorhpsousa.dpfsentinel.core.RegenEvent
+import io.github.vitorhpsousa.dpfsentinel.core.RegenSpeech
 import io.github.vitorhpsousa.dpfsentinel.core.RegenWatch
 import io.github.vitorhpsousa.dpfsentinel.core.Row
 import io.github.vitorhpsousa.dpfsentinel.core.SootZone
@@ -184,6 +185,7 @@ class LoggerService : Service() {
         val health = HealthTracker(HealthState.decode(prefs.health))
         val zone = SootZone(prefs.sootZone)
         val idleWatch = IdleBlockageWatch()
+        val speech = RegenSpeech()
         val startNotice = StartNotice()
         var noticesSent = 0   // connect messages queued in this session
         val history = ArrayDeque<HistoryPoint>()
@@ -394,6 +396,14 @@ class LoggerService : Service() {
                     if (row.speed.isNaN()) gps.speedKmh else row.speed, rpm = row.rpm)
                 idleWatch.update(now, row.rpm, row.speed, row.diffPressure, row.coolant, watch.active || row.regenActive)
                 if (ev.type != RegenEvent.Type.NONE) postRegenEvent(ev)
+                // Out loud, through the car's speakers: started, halfway, nearly done, finished.
+                val spoken = when (ev.type) {
+                    RegenEvent.Type.START -> speech.started(row.soot)
+                    RegenEvent.Type.END -> speech.ended(finished = true)
+                    RegenEvent.Type.INTERRUPTED -> speech.ended(finished = false)
+                    else -> if (watch.active && !watch.paused) speech.update(row.soot) else null
+                }
+                if (spoken != null && prefs.speakAlerts) (application as DpfApp).speaker.say(spoken)
                 // Kept until a row has the odometer in it: a tap is not lost on a row without one.
                 if (!row.odometer.isNaN() && oilChangeRequested.getAndSet(false)) health.oilChangeNow(row.odometer)
                 health.update(row, ev, now, wall)

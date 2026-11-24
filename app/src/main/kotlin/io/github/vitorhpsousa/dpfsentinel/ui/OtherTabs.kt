@@ -138,6 +138,9 @@ fun SettingsTab(s: Snapshot) {
         )
 
         HorizontalDivider()
+        VoiceCard()
+
+        HorizontalDivider()
         TelegramCard(s, units)
 
         HorizontalDivider()

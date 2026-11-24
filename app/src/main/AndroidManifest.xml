@@ -35,6 +35,13 @@
     <uses-feature android:name="android.hardware.location.gps" android:required="false" />
     <uses-feature android:name="android.hardware.sensor.barometer" android:required="false" />
 
+    <!-- Spoken regen alerts: lets the app see the phone's text-to-speech engine (Android 11+). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <application
         android:name=".DpfApp"
         android:allowBackup="false"

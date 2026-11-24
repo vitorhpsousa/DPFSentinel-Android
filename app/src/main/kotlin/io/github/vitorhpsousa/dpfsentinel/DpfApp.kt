@@ -10,6 +10,9 @@ class DpfApp : Application() {
     /** One sender for the logger and the settings screen's test/report buttons. */
     val telegram by lazy { Telegram(this) }
 
+    /** The voice for spoken regen alerts; also used by the settings screen's test button. */
+    val speaker by lazy { Speaker(this) }
+
     override fun onCreate() {
         super.onCreate()
         val nm = getSystemService(NotificationManager::class.java)
