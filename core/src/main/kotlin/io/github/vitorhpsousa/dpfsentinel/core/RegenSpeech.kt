@@ -26,6 +26,9 @@ class RegenSpeech {
         return if (finished) FINISHED else CUT_SHORT
     }
 
+    /** The regen's data stopped and nobody saw how it ended: say nothing, just forget it. */
+    fun lost() { open = false }
+
     /** Call for every row while the regen is running (not on hold). Returns a milestone to say, or null. */
     fun update(soot: Double): String? {
         if (!open || soot.isNaN()) return null

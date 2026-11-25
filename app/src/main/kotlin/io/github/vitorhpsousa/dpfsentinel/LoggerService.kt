@@ -400,7 +400,8 @@ class LoggerService : Service() {
                 val spoken = when (ev.type) {
                     RegenEvent.Type.START -> speech.started(row.soot)
                     RegenEvent.Type.END -> speech.ended(finished = true)
-                    RegenEvent.Type.INTERRUPTED -> speech.ended(finished = false)
+                    RegenEvent.Type.INTERRUPTED ->
+                        if (ev.headline == Messages.REGEN_UNSEEN_END) { speech.lost(); null } else speech.ended(finished = false)
                     else -> if (watch.active && !watch.paused) speech.update(row.soot) else null
                 }
                 if (spoken != null && prefs.speakAlerts) (application as DpfApp).speaker.say(spoken)

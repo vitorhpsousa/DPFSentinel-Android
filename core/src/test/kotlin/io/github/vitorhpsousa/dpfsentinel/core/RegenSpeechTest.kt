@@ -58,4 +58,11 @@ class RegenSpeechTest {
         assertEquals(1, RegenSpeech.minutesLeft(4.8))
         assertEquals(15, RegenSpeech.minutesLeft(18.0))
     }
+
+    @Test fun lostRegenIsForgottenAndSilent() {
+        val sp = RegenSpeech()
+        sp.started(18.0)
+        sp.lost()
+        assertEquals(null, sp.update(10.0))     // closed: no milestones after the data stopped
+    }
 }

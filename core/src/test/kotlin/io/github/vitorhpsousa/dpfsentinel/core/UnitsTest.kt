@@ -42,8 +42,8 @@ class UnitsTest {
         repeat(3) { ev = w.update(t.also { t += 1000 }, Double.NaN, 1.0, 600.0, 18.0, 250.0, Double.NaN) }
         assertTrue("402.3 km since the last regen" in ev.text, ev.text)
         assertTrue("EGT 600 °C" in ev.text, ev.text)
-        assertTrue("under 100 mi apart" in HealthAlert.FAST_REGENS.text(Units.UK))
-        assertTrue("under 161 km apart" in HealthAlert.FAST_REGENS.text(Units.METRIC))
+        assertTrue("under 35 mi apart" in HealthAlert.FAST_REGENS.text(Units.UK))
+        assertTrue("under 56 km apart" in HealthAlert.FAST_REGENS.text(Units.METRIC))
         assertTrue("warm-up to 176 °F" in HealthAlert.SLOW_WARMUP.text(Units.US))
     }
 }

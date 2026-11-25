@@ -339,7 +339,9 @@ class HealthTracker(val state: HealthState = HealthState(), private val zone: Zo
     }
 
     companion object {
-        const val FAST_REGEN_THRESHOLD_MI = 100.0
+        // This car's own regen intervals run 51-144 mi (median ~88, 16 cycles in the 2026-09..11 logs), so 100 mi
+        // would fire on normal driving; 35 mi is well below the shortest interval seen.
+        const val FAST_REGEN_THRESHOLD_MI = 35.0
         const val OIL_REMINDER_REGENS = 15
         const val SLOW_WARMUP_RATIO = 1.3
         const val SLOW_WARMUP_MIN_SAMPLES = 3

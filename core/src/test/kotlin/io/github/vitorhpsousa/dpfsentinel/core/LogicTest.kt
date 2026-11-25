@@ -182,9 +182,20 @@ class LogicTest {
 
     @Test fun fastRegenAlertOncePerEpisode() {
         val h = HealthTracker(zone = ZoneOffset.UTC)
-        // Three separate cycles, 80 mi apart (same odometer + distance would be one regen retried).
-        for (i in 0 until 3) h.update(row(18.0, 80.0, odo = 50_080.0 + 80.0 * i), RegenEvent(RegenEvent.Type.START, ""), i * 1000L, nan)
+        // Three separate cycles, 20 mi apart (same odometer + distance would be one regen retried).
+        for (i in 0 until 3) h.update(row(18.0, 20.0, odo = 50_020.0 + 20.0 * i), RegenEvent(RegenEvent.Type.START, ""), i * 1000L, nan)
         assertEquals(listOf(HealthAlert.FAST_REGENS), h.takeAlerts())
+        assertEquals(emptyList(), h.takeAlerts())
+    }
+
+    @Test fun normalRegenIntervalsForThisCarDoNotRaiseFastRegenAlert() {
+        val h = HealthTracker(zone = ZoneOffset.UTC)
+        // This car's real intervals: 89, 92, 51, 64, 88 mi.
+        var odo = 50_000.0
+        for ((i, gap) in listOf(89.0, 92.0, 51.0, 64.0, 88.0).withIndex()) {
+            odo += gap
+            h.update(row(18.0, gap, odo = odo), RegenEvent(RegenEvent.Type.START, ""), i * 1000L, nan)
+        }
         assertEquals(emptyList(), h.takeAlerts())
     }
 

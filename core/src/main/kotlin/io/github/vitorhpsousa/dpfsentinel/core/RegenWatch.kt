@@ -101,8 +101,10 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val 
         }
     }
 
-    private fun closeByFilter(endMs: Long, wallClock: Double, why: String) =
-        close(if (resetSeen || emptyFilter()) RegenEvent.Type.END else RegenEvent.Type.INTERRUPTED, endMs, wallClock, why)
+    // [unseenEnd]: the data simply stopped, so nobody saw how it ended; do not claim it was cut short.
+    private fun closeByFilter(endMs: Long, wallClock: Double, why: String, unseenEnd: Boolean = false) =
+        if (resetSeen || emptyFilter()) close(RegenEvent.Type.END, endMs, wallClock, why)
+        else close(RegenEvent.Type.INTERRUPTED, endMs, wallClock, why, if (unseenEnd) Messages.REGEN_UNSEEN_END else null)
 
     /**
      * Call when logging stops (session end, service shutdown, crash handler) so a regen that is
@@ -137,7 +139,7 @@ class RegenWatch(private val zone: ZoneId = ZoneId.systemDefault(), private val 
         if (active.isNaN()) {
             // The ECU has stopped answering altogether (asleep, adapter unplugged) mid-regen.
             if (byEngine && inRegen && nowMs - lastValidMs > GAP_MS) {
-                return closeByFilter(if (isPaused) pausedAtMs else lastValidMs, wallClock, "no data from the engine")
+                return closeByFilter(if (isPaused) pausedAtMs else lastValidMs, wallClock, "no data from the engine", unseenEnd = true)
             }
             return RegenEvent.NONE
         }

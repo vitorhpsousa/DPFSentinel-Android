@@ -149,6 +149,8 @@ class RegenRulesTest {
         c.rows(2, nan, nan, speed = nan, soot = nan, dist = nan)
         assertEquals(listOf(T.START, T.INTERRUPTED), c.types)
         assertTrue("no data" in c.events[1].detail)
+        // Nobody saw the end, so it must not claim "cut short".
+        assertEquals(Messages.REGEN_UNSEEN_END, c.events[1].headline)
     }
 
     @Test fun gapInRowsThenFlagStillOnCarriesOn() {
