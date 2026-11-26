@@ -14,8 +14,8 @@ android {
         applicationId = "com.dpfsentinel"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.6.2"
+        versionCode = 10
+        versionName = "1.7.0"
     }
 
     // One fixed key for every build: the Google Play upload key, and the key sideloaded APKs are signed
@@ -68,6 +68,9 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+
+    // Google sign-in for the optional Drive back-up (asks for the drive.file permission only).
+    implementation("com.google.android.gms:play-services-auth:22.0.0")
 
     // Android Auto (Car App Library templates)
     implementation("androidx.car.app:app:1.4.0")

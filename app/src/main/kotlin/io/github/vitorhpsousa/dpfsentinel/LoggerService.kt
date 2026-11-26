@@ -56,6 +56,7 @@ class LoggerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private lateinit var prefs: Prefs
     private lateinit var telegram: Telegram
+    private lateinit var drive: DriveUpload
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -63,6 +64,7 @@ class LoggerService : Service() {
         super.onCreate()
         prefs = Prefs(this)
         telegram = (application as DpfApp).telegram
+        drive = (application as DpfApp).drive
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -373,6 +375,7 @@ class LoggerService : Service() {
                             latestLine = Messages.latestLine(null, u),
                             currentSession = session.number,
                         )
+                        drive.tick(session.number)
                     }
                     Thread.sleep(200)
                     continue
@@ -487,6 +490,7 @@ class LoggerService : Service() {
                         latestLine = Messages.latestLine(snapRow, u),
                         currentSession = session.number,
                     )
+                    drive.tick(session.number)
                 }
                 if (now - lastNotif >= 5000) {
                     lastNotif = now
@@ -525,6 +529,8 @@ class LoggerService : Service() {
             sensors.stop()
             session.close()
             if (health.dirty) prefs.health = health.state.encode()
+            // The session just closed is ready for the Drive back-up (a no-op unless it is connected).
+            drive.sync(currentSession = -1)
         }
         return crashed
     }

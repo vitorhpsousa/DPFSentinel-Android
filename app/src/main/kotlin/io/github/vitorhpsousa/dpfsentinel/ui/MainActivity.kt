@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         val running = LiveState.state.value.running
         (application as DpfApp).telegram.retry()   // alerts that could not be sent last time
+        (application as DpfApp).drive.tick(if (running) LiveState.state.value.session else -1)   // logs not yet in Drive
         if (running && !LoggerService.gpsOn && granted(Manifest.permission.ACCESS_FINE_LOCATION)) {
             runCatching { LoggerService.addGps(this) }
         } else {

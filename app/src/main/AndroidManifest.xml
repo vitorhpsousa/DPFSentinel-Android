@@ -20,6 +20,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Telegram alerts and reports -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The Google Drive back-up can be held back until the phone is on Wi-Fi. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Automatic logging: Android wakes the app when the paired OBD adapter comes into range
          (PresenceService) and lets it start the logger from the background; re-armed after a reboot. -->

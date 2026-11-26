@@ -171,6 +171,30 @@ class Prefs(context: Context) {
         get() = p.getBoolean("logPos", false)
         set(v) = p.edit().putBoolean("logPos", v).apply()
 
+    /** Google Drive back-up: on once the user has connected it in Settings. */
+    var driveOn: Boolean
+        get() = p.getBoolean("driveOn", false)
+        set(v) = p.edit().putBoolean("driveOn", v).apply()
+
+    var driveWifiOnly: Boolean
+        get() = p.getBoolean("driveWifi", true)
+        set(v) = p.edit().putBoolean("driveWifi", v).apply()
+
+    /** The id of the app's folder in Drive, so it is not searched for on every upload. */
+    var driveFolderId: String
+        get() = p.getString("driveFolder", "") ?: ""
+        set(v) = p.edit().putString("driveFolder", v).apply()
+
+    /** Every session up to this number is in Drive. */
+    var driveLastSession: Int
+        get() = p.getInt("driveLast", 0)
+        set(v) = p.edit().putInt("driveLast", v).apply()
+
+    /** Files of the next session that already went, when an upload stopped half-way. */
+    var driveDoneNames: Set<String>
+        get() = p.getStringSet("driveDone", emptySet())?.toSet() ?: emptySet()
+        set(v) = p.edit().putStringSet("driveDone", v.toSet()).apply()
+
     /**
      * Never reuses a number: also above any log file already on the phone, and saved with commit()
      * so a kill right after starting can't lose the increment (apply() writes later).
