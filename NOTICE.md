@@ -25,11 +25,20 @@ under the Apache License 2.0, and they are packaged into the APK:
   Source Project
 - Kotlin standard library and kotlinx.coroutines: JetBrains s.r.o. and contributors
 
+The optional Google Drive back-up also uses **Google Play services (`play-services-auth`)**, which is not open
+source: it is Google's library, under the [Android Software Development Kit License](https://developer.android.com/studio/terms).
+
+### Additional permission under GNU GPL version 3 section 7
+
+If you modify this program, or any covered work, by linking or combining it with Google Play services (or a modified
+version of that library), containing parts covered by the terms of the Android Software Development Kit License, the
+licensors of this program grant you additional permission to convey the resulting work.
+
 `gradlew`, `gradlew.bat` and `gradle/wrapper/gradle-wrapper.jar` are the unmodified Gradle Wrapper, Apache License 2.0.
 
 [DCO](DCO) is the Developer Certificate of Origin 1.1, copyright The Linux Foundation and its contributors.
 
 ## Names
 
-Hyundai, ix35, Android, Android Auto, Google Play and Telegram are trademarks of their owners. This project is not
+Hyundai, ix35, Android, Android Auto, Google Play, Google Drive and Telegram are trademarks of their owners. This project is not
 affiliated with or endorsed by any of them.

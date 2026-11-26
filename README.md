@@ -100,6 +100,13 @@ It changes the screens, the car screen, notifications and Telegram messages. The
 car's own units (speed in km/h, distances in miles, temperatures in °C), so they stay comparable with the
 firmware's logs and tools.
 
+## Google Drive
+
+*Settings → Google Drive → Connect Google Drive*: pick your Google account on Google's screen and allow it. From then
+on each finished drive's `session_N.csv` and `raw_N.log` are copied to a "DPF Sentinel" folder in your own Drive
+(on Wi-Fi only, unless you switch that off). The app can only see the files it put there, and nothing goes to the
+developer. **Upload now** sends what is waiting; **Disconnect** stops it.
+
 ## Logs
 
 *Logs* lists the files; **Share** sends one to Drive, email, Telegram, etc. They also sit in

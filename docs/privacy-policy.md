@@ -10,8 +10,8 @@ Android app (`com.dpfsentinel`), whether installed from Google Play or from the 
 - **The developer collects nothing.** The app has no account, no analytics, no ads and no server of
   the developer's. Nobody but you can see your data.
 - **Your data stays on your phone.** Everything the app records is stored there, for you.
-- **It only leaves the phone when you send it somewhere yourself:** by sharing a log file, or by
-  setting up your own Telegram bot.
+- **It only leaves the phone when you send it somewhere yourself:** by sharing a log file, by
+  setting up your own Telegram bot, or by connecting your own Google Drive.
 
 The rest of this page gives the detail.
 
@@ -65,8 +65,10 @@ drive:
   off unless you turn it on. With it on, a log shows where you drove.
 
 Your settings are stored on the phone in the app's private settings. They include the adapter's and
-the car's Bluetooth name and address, the last readings, alerts waiting to be sent, and a Telegram
-bot token and chat id if you enter them. The app is excluded from Android's cloud backup.
+the car's Bluetooth name and address, the last readings, alerts waiting to be sent, a Telegram
+bot token and chat id if you enter them, and, if you connect Google Drive, the id of the Drive folder
+and which log files have already been copied. The app does not store your Google password or your
+Google account's email address. The app is excluded from Android's cloud backup.
 
 ## What leaves the phone
 
@@ -82,6 +84,22 @@ bot token and chat id if you enter them. The app is excluded from Android's clou
   The app also asks Telegram for messages sent to your bot, so it can answer `/status`.
   Nothing is sent to Telegram until you set this up, and it stops when you clear the token or chat id.
   What Telegram does with it is covered by Telegram's own privacy policy.
+- **Google Drive, only if you connect it.** If you tap *Connect Google Drive* in Settings and allow
+  it on Google's own screen, the app copies each finished drive's log files to a folder called
+  "DPF Sentinel" in **your own** Google Drive. These are the files described above, so they include
+  altitude and speed, and **your route if "Log position" is on**.
+  - The app is only allowed to see the files it put there itself. It cannot see, read or change
+    anything else in your Drive.
+  - The files go from your phone straight to Google. The developer has no access to your Drive, your
+    Google account or the files, and receives nothing.
+  - Uploads wait for Wi-Fi unless you switch *Only upload on Wi-Fi* off.
+  - It stops when you tap *Disconnect*. To withdraw the permission itself, remove DPF Sentinel under
+    "Third-party apps and services" in your Google Account.
+
+  What Google does with the files is covered by Google's own privacy policy. The app's use of
+  information received from Google APIs adheres to the
+  [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy),
+  including the Limited Use requirements.
 - **Spoken alerts** (on unless you turn them off in Settings). The alert text, such as "filter
   cleaning finished", is passed to the text-to-speech engine installed on your phone. What that engine
   does with it is up to its maker.
@@ -101,7 +119,8 @@ bot token and chat id if you enter them. The app is excluded from Android's clou
 - Run at startup: sets the automatic-logging triggers up again after a restart. It does not start logging.
 - Alarms & reminders (exact alarms): the daily "look for the car" time, if you set one.
 - Prevent the phone from sleeping: keeps reading the car while the screen is off.
-- Internet: only for Telegram, if you set it up.
+- Internet: only for Telegram and Google Drive, if you set them up.
+- View network connections: to tell whether the phone is on Wi-Fi before a Google Drive upload.
 
 ## Deleting data
 
@@ -109,6 +128,8 @@ bot token and chat id if you enter them. The app is excluded from Android's clou
 - Uninstalling the app removes all log files and settings from the phone.
 - **Files and messages already sent to Telegram stay in that Telegram chat.** The app cannot remove
   them; delete them in Telegram (delete the messages or the chat).
+- **Files already copied to Google Drive stay in your Drive.** Delete them there, in the
+  "DPF Sentinel" folder.
 - To stop location being read, turn off the Location permission for the app in Android's settings.
 
 ## Google Play testers
