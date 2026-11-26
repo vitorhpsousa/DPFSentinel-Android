@@ -10,7 +10,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -25,34 +27,45 @@ import com.google.android.gms.auth.api.identity.Identity
 import io.github.vitorhpsousa.dpfsentinel.DpfApp
 import io.github.vitorhpsousa.dpfsentinel.DriveUpload
 import io.github.vitorhpsousa.dpfsentinel.Prefs
-import io.github.vitorhpsousa.dpfsentinel.Snapshot
 
 // The Google Drive part of the settings: connect once, then every finished drive is copied to a
 // "DPF Sentinel" folder in the user's own Drive. Placed inside SettingsTab's column.
 @Composable
-fun DriveCard(s: Snapshot) {
+fun DriveCard() {
     val ctx = LocalContext.current
     val prefs = remember { Prefs(ctx) }
     val drive = (ctx.applicationContext as DpfApp).drive
     var on by remember { mutableStateOf(prefs.driveOn) }
     var wifiOnly by remember { mutableStateOf(prefs.driveWifiOnly) }
-    var result by remember { mutableStateOf(drive.lastResult) }
+    val result by drive.result.collectAsState()
 
-    fun onMain(f: () -> Unit) = android.os.Handler(android.os.Looper.getMainLooper()).post(f)
-    fun current() = if (s.running) s.session else -1
     fun connected() {
         drive.connected()
         on = true
-        result = "connected, uploading…"
-        drive.sync(current()) { r -> onMain { result = r } }
+        drive.sync()
     }
 
     // Google's own screen, where the user picks the account and allows access.
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
-        if (r.resultCode != Activity.RESULT_OK) { result = "not connected (cancelled)"; return@rememberLauncherForActivityResult }
+        if (r.resultCode != Activity.RESULT_OK) { drive.note(if (on) "not confirmed (cancelled)" else "not connected (cancelled)"); return@rememberLauncherForActivityResult }
         runCatching { Identity.getAuthorizationClient(ctx).getAuthorizationResultFromIntent(r.data) }
-            .onSuccess { if (it.accessToken.isNullOrEmpty()) result = "Google gave no access" else connected() }
-            .onFailure { result = "Google sign-in failed: ${it.message ?: it.javaClass.simpleName}" }
+            .onSuccess { if (it.accessToken.isNullOrEmpty()) drive.note("Google gave no access") else connected() }
+            .onFailure { drive.note("Google sign-in failed: ${it.message ?: it.javaClass.simpleName}") }
+    }
+
+    // Asks Google for access: straight through when it was already given, else via Google's screen.
+    fun connect() {
+        drive.note("asking Google…")
+        Identity.getAuthorizationClient(ctx).authorize(DriveUpload.request())
+            .addOnSuccessListener { a ->
+                val pending = a.pendingIntent
+                if (a.hasResolution() && pending != null) {
+                    runCatching { consent.launch(IntentSenderRequest.Builder(pending.intentSender).build()) }
+                        .onFailure { drive.note("couldn't open Google sign-in") }
+                } else if (!a.accessToken.isNullOrEmpty()) connected()
+                else drive.note("Google gave no access")
+            }
+            .addOnFailureListener { drive.note("Google sign-in failed: ${it.message ?: it.javaClass.simpleName}") }
     }
 
     Text("Google Drive", fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -62,30 +75,17 @@ fun DriveCard(s: Snapshot) {
         color = Muted, fontSize = 12.sp,
     )
     if (!on) {
-        Button(onClick = {
-            result = "asking Google…"
-            Identity.getAuthorizationClient(ctx).authorize(DriveUpload.request())
-                .addOnSuccessListener { a ->
-                    val pending = a.pendingIntent
-                    if (a.hasResolution() && pending != null) {
-                        runCatching { consent.launch(IntentSenderRequest.Builder(pending.intentSender).build()) }
-                            .onFailure { result = "couldn't open Google sign-in" }
-                    } else if (!a.accessToken.isNullOrEmpty()) connected()
-                    else result = "Google gave no access"
-                }
-                .addOnFailureListener { result = "Google sign-in failed: ${it.message ?: it.javaClass.simpleName}" }
-        }) { Text("Connect Google Drive") }
+        Button(onClick = { connect() }) { Text("Connect Google Drive") }
     } else {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Only upload on Wi-Fi", Modifier.weight(1f))
             Switch(wifiOnly, { wifiOnly = it; prefs.driveWifiOnly = it })
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = {
-                result = "uploading…"
-                drive.sync(current()) { r -> onMain { result = r } }
-            }) { Text("Upload now") }
-            OutlinedButton(onClick = { drive.disconnect(); on = false; result = drive.lastResult }) { Text("Disconnect") }
+            Button(onClick = { drive.note("uploading…"); drive.sync() }) { Text("Upload now") }
+            OutlinedButton(onClick = { drive.disconnect(); on = false }) { Text("Disconnect") }
+            // For when Google asks to confirm access again (it was removed in the Google Account, or lapsed).
+            TextButton(onClick = { connect() }) { Text("Reconnect") }
         }
         Text(
             "Disconnect stops the uploads; files already in Drive stay there. To withdraw the permission itself, " +

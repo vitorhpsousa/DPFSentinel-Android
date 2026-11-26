@@ -33,13 +33,19 @@ object DriveLogic {
         return "name = '$safe' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
     }
 
+    /** Drive's search text for a file of this name inside one folder. */
+    fun fileQuery(name: String, folderId: String): String {
+        val safe = name.replace("\\", "\\\\").replace("'", "\\'")
+        return "name = '$safe' and '$folderId' in parents and trashed = false"
+    }
+
     fun mime(name: String): String = if (name.endsWith(".csv")) "text/csv" else "text/plain"
 
     /** What to tell the user for an HTTP status from Drive (0 = no answer at all). */
     fun describe(code: Int): String = when (code) {
         0 -> "no connection to Google Drive, will try again"
-        401 -> "Google sign-in has expired: tap Connect Google Drive"
-        403 -> "Google Drive refused the upload (storage full, or access removed)"
+        401 -> "Google sign-in has expired: tap Reconnect"
+        403 -> "Google Drive refused the upload (storage full, access removed, or too many requests)"
         404 -> "the Drive folder is gone, it will be made again"
         429 -> "Google Drive is busy, will try again"
         in 500..599 -> "Google Drive had a problem ($code), will try again"

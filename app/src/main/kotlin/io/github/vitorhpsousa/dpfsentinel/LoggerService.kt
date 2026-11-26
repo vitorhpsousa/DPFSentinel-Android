@@ -178,7 +178,9 @@ class LoggerService : Service() {
     /** One logging session. Returns true if it ended on an unexpected error. */
     private fun loop(): Boolean {
         val elm = BleElm(this)
-        val session = SessionFiles(this, prefs.nextSessionNumber(SessionFiles.highestNumber(this)))
+        val sessionNumber = prefs.nextSessionNumber(SessionFiles.highestNumber(this))
+        drive.activeSession = sessionNumber   // before the files exist: the Drive back-up must not take them yet
+        val session = SessionFiles(this, sessionNumber)
         val t0 = SystemClock.elapsedRealtime()
         fun ms() = SystemClock.elapsedRealtime() - t0
         fun unix() = System.currentTimeMillis() / 1000.0
@@ -375,7 +377,7 @@ class LoggerService : Service() {
                             latestLine = Messages.latestLine(null, u),
                             currentSession = session.number,
                         )
-                        drive.tick(session.number)
+                        drive.tick()
                     }
                     Thread.sleep(200)
                     continue
@@ -490,7 +492,7 @@ class LoggerService : Service() {
                         latestLine = Messages.latestLine(snapRow, u),
                         currentSession = session.number,
                     )
-                    drive.tick(session.number)
+                    drive.tick()
                 }
                 if (now - lastNotif >= 5000) {
                     lastNotif = now
@@ -530,7 +532,8 @@ class LoggerService : Service() {
             session.close()
             if (health.dirty) prefs.health = health.state.encode()
             // The session just closed is ready for the Drive back-up (a no-op unless it is connected).
-            drive.sync(currentSession = -1)
+            drive.activeSession = -1
+            drive.sync()
         }
         return crashed
     }

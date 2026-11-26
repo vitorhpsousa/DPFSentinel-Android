@@ -145,7 +145,7 @@ fun SettingsTab(s: Snapshot) {
         TelegramCard(s, units)
 
         HorizontalDivider()
-        DriveCard(s)
+        DriveCard()
 
         HorizontalDivider()
         AutoLogCard()

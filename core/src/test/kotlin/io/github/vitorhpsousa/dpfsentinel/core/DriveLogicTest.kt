@@ -59,11 +59,15 @@ class DriveLogicTest {
         assertTrue(DriveLogic.folderQuery("Vitor's logs").startsWith("name = 'Vitor\\'s logs' and"))
     }
 
+    @Test fun `file search is tied to the folder`() {
+        assertEquals("name = 'session_3.csv' and 'abc123' in parents and trashed = false", DriveLogic.fileQuery("session_3.csv", "abc123"))
+    }
+
     @Test fun `file types and error texts`() {
         assertEquals("text/csv", DriveLogic.mime("session_3.csv"))
         assertEquals("text/plain", DriveLogic.mime("raw_3.log"))
         assertTrue(DriveLogic.describe(0).contains("no connection"))
-        assertTrue(DriveLogic.describe(401).contains("Connect Google Drive"))
+        assertTrue(DriveLogic.describe(401).contains("Reconnect"))
         assertTrue(DriveLogic.describe(503).contains("503"))
     }
 }
