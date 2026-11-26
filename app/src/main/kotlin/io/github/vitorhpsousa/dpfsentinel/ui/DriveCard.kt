@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.api.ApiException
 import io.github.vitorhpsousa.dpfsentinel.DpfApp
 import io.github.vitorhpsousa.dpfsentinel.DriveUpload
 import io.github.vitorhpsousa.dpfsentinel.Prefs
@@ -47,7 +48,15 @@ fun DriveCard() {
 
     // Google's own screen, where the user picks the account and allows access.
     val consent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
-        if (r.resultCode != Activity.RESULT_OK) { drive.note(if (on) "not confirmed (cancelled)" else "not connected (cancelled)"); return@rememberLauncherForActivityResult }
+        if (r.resultCode != Activity.RESULT_OK) {
+            // Google also answers "cancelled" when it refuses the app (unknown signing key, not a test user),
+            // so ask it why: the refusal's code is what tells the two apart.
+            val why = runCatching { Identity.getAuthorizationClient(ctx).getAuthorizationResultFromIntent(r.data); "" }
+                .getOrElse { e -> (e as? ApiException)?.let { "Google error ${it.statusCode}: ${it.message ?: ""}".trim() } ?: (e.message ?: e.javaClass.simpleName) }
+            val what = if (on) "not confirmed" else "not connected"
+            drive.note(if (why.isEmpty()) "$what (cancelled)" else "$what ($why)")
+            return@rememberLauncherForActivityResult
+        }
         runCatching { Identity.getAuthorizationClient(ctx).getAuthorizationResultFromIntent(r.data) }
             .onSuccess { if (it.accessToken.isNullOrEmpty()) drive.note("Google gave no access") else connected() }
             .onFailure { drive.note("Google sign-in failed: ${it.message ?: it.javaClass.simpleName}") }
