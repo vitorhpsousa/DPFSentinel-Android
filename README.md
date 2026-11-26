@@ -46,7 +46,7 @@ they only list it when Android records Google Play as its installer. The working
 record. It is a third-party tool, the author reports it working in most but not all cases, and a future
 Android Auto update could stop it.
 
-1. Uninstall DPF Sentinel if a version from before 1.2 is installed (those were signed with one-off keys).
+1. If an older build refuses to update, uninstall DPF Sentinel first (some early builds were signed with one-off keys).
 2. Install KingInstaller from its [releases page](https://github.com/fcaronte/KingInstaller/releases).
 3. In KingInstaller pick `DPF-Sentinel-<version>.apk` and install with the default (Classic) method.
 4. Check its *App Diagnostic Checker*: "Installed by" must say Google Play Store. If it doesn't, set up
