@@ -49,7 +49,10 @@ jobs:
         run: |
           v=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
           mv app/build/outputs/apk/debug/app-debug.apk "app/build/outputs/apk/debug/DPF-Sentinel-$v.apk"
+      # Pull requests are built and tested but publish nothing, so an APK built from someone else's
+      # changes never sits under the same artifact name as a build from this repository.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        if: github.event_name != 'pull_request'
         with:
           name: dpf-sentinel-apk
           path: app/build/outputs/apk/debug/*.apk
@@ -64,7 +67,7 @@ jobs:
           v=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
           mv app/build/outputs/bundle/release/app-release.aab "app/build/outputs/bundle/release/DPF-Sentinel-$v.aab"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
-        if: env.SIDELOAD_KEYSTORE != ''
+        if: env.SIDELOAD_KEYSTORE != '' && github.event_name != 'pull_request'
         with:
           name: dpf-sentinel-play-bundle
           path: app/build/outputs/bundle/release/*.aab

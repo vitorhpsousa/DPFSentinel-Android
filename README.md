@@ -12,12 +12,14 @@ Read-only, not a diagnostic tool: see [docs/disclaimer.md](https://github.com/vi
 
 ## Get the APK
 
-Every push builds it on GitHub Actions:
+1. Download `DPF-Sentinel-<version>.apk` from the
+   [latest release](https://github.com/vitorhpsousa/DPFSentinel-Android/releases/latest). No GitHub account
+   is needed, and each release lists the file's SHA-256.
+2. Copy it to the phone and open it (Android asks once to allow installs from Files/Chrome). For the
+   Android Auto screen, install it with KingInstaller instead: see below.
 
-1. Open the repo's **Actions** tab → **Android app** → the latest green run.
-2. Download the **dpf-sentinel-apk** artifact (a zip) and unzip it.
-3. Copy `DPF-Sentinel-<version>.apk` to the phone and open it (Android asks once to allow installs from
-   Files/Chrome). For the Android Auto screen, install it with KingInstaller instead: see below.
+Only install an APK from the Releases page of this repository. Every push to `main` is also built on GitHub
+Actions (**Actions** tab → **Android app**, GitHub login needed); those are development builds.
 
 Or build it yourself with Android Studio (open this folder), or from a terminal with the Android SDK:
 
