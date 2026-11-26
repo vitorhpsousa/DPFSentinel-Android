@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import io.github.vitorhpsousa.dpfsentinel.core.AdapterChoice
 import io.github.vitorhpsousa.dpfsentinel.core.HealthState
 import io.github.vitorhpsousa.dpfsentinel.core.HealthTracker
 import io.github.vitorhpsousa.dpfsentinel.core.IdleBlockageWatch
@@ -290,19 +291,27 @@ class LoggerService : Service() {
 
         fun connectAdapter(): Boolean {
             if (!elm.bluetoothOn) { status = "Bluetooth is off"; return false }
-            // A saved adapter is reconnected by address; every third failure scans instead, so a
-            // replaced adapter is found without a trip to the settings. Android pauses unfiltered
-            // scans while the screen is off, so that rescan only runs with the screen on.
+            // A saved adapter is the only one used (see AdapterChoice): by address, and every third
+            // failure by a scan for that same adapter. Only with nothing saved does the scan take any
+            // adapter-like name; Android pauses that unfiltered scan while the screen is off.
             val screenOn = power?.isInteractive ?: true
             val saved = prefs.adapterAddress
-            val useSaved = saved.isNotEmpty() && (connectFails % 3 != 2 || !screenOn)
-            status = if (useSaved) "Connecting to ${prefs.adapterName.ifEmpty { saved }}…" else "Scanning for the OBD adapter…"
+            val savedName = prefs.adapterName.ifEmpty { saved }
+            val plan = AdapterChoice.plan(saved, prefs.assocMac, connectFails)
+            status = when {
+                plan.connectTo.isNotEmpty() -> "Connecting to $savedName…"
+                saved.isNotEmpty() -> "Looking for $savedName…"
+                else -> "Scanning for the OBD adapter…"
+            }
             publish(latest)
-            val dev = elm.find(if (useSaved) saved else "", onlyAddress = prefs.assocMac)
+            val dev = elm.find(plan.connectTo, onlyAddress = plan.scanFor)
             if (dev == null) {
                 connectFails++
-                status = if (saved.isEmpty() && !screenOn) "Turn the phone screen on once so it can find the OBD adapter"
-                else "No adapter found: plug it in, ignition on, and close other OBD apps"
+                status = when {
+                    saved.isEmpty() && plan.scanFor.isEmpty() && !screenOn -> "Turn the phone screen on once so it can find the OBD adapter"
+                    saved.isNotEmpty() && connectFails >= 3 -> "Can't find $savedName. New adapter? Settings → Forget adapter"
+                    else -> "No adapter found: plug it in, ignition on, and close other OBD apps"
+                }
                 return false
             }
             if (!elm.connect(dev) || !poller.initAdapter(ms())) {
