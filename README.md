@@ -9,6 +9,7 @@ Use the phone **or** the board, not both: a BLE ELM327 accepts one connection at
 
 Only the 2014 Hyundai ix35 1.7 CRDi is verified (same PID table as the firmware, [docs/pids.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/pids.md)).
 Read-only, not a diagnostic tool: see [docs/disclaimer.md](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3/blob/main/docs/disclaimer.md).
+Nothing is sent to the developer: see the [privacy policy](docs/privacy-policy.md).
 
 ## Get the APK
 
