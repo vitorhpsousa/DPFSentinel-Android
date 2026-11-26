@@ -31,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -194,8 +195,13 @@ fun SettingsTab(s: Snapshot) {
         Text(
             "DPF Sentinel is a read-only logger for a 2014 Hyundai ix35 1.7 CRDi; other cars use other PIDs. " +
                 "Not a diagnostic tool. Free software (GPL-3.0-or-later) with no warranty; source at " +
-                "github.com/vitorhpsousa/DPFSentinel-Android. ${Messages.KOFI_URL}",
+                "github.com/vitorhpsousa/DPFSentinel-Android.",
             color = Muted, fontSize = 11.sp,
         )
+        // Opens Ko-fi in the browser. A phone with no browser throws, so that case is ignored.
+        val uriHandler = LocalUriHandler.current
+        TextButton(onClick = { runCatching { uriHandler.openUri(Messages.KOFI_URL) } }) {
+            Text("Found this useful? Buy me a coffee on Ko-fi")
+        }
     }
 }
