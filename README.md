@@ -117,3 +117,18 @@ app/    Android: BLE link (obd/BleElm.kt), LoggerService (the main loop), Telegr
 ```
 
 Changes to PIDs or thresholds should be made in both the firmware's `src/` ([DPFSentinel-ESP32-S3](https://github.com/vitorhpsousa/DPFSentinel-ESP32-S3)) and `core/` here, so the two stay in step.
+
+## Support
+
+DPF Sentinel is free and stays free. If it saves you a DPF job, you can buy me a coffee on
+[Ko-fi](https://ko-fi.com/vitoi). Entirely optional.
+
+## Licence
+
+Copyright (C) 2026 Vitor Sousa and the DPF Sentinel contributors.
+
+DPF Sentinel is free software, licensed under the GNU General Public License, version 3 or (at your option) any
+later version (GPL-3.0-or-later): see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md). It comes with no warranty.
+The source for every released APK is the commit its release tag points to.
+
+To contribute, see [CONTRIBUTING.md](CONTRIBUTING.md).

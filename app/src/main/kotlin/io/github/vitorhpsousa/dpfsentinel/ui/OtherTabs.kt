@@ -192,8 +192,9 @@ fun SettingsTab(s: Snapshot) {
 
         HorizontalDivider()
         Text(
-            "DPF Sentinel is a read-only logger for a 2014 Hyundai ix35 1.7 CRDi; other cars use other PIDs (docs/other-cars.md). " +
-                "Not a diagnostic tool. ${Messages.KOFI_URL}",
+            "DPF Sentinel is a read-only logger for a 2014 Hyundai ix35 1.7 CRDi; other cars use other PIDs. " +
+                "Not a diagnostic tool. Free software (GPL-3.0-or-later) with no warranty; source at " +
+                "github.com/vitorhpsousa/DPFSentinel-Android. ${Messages.KOFI_URL}",
             color = Muted, fontSize = 11.sp,
         )
     }
