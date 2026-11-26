@@ -1,19 +1,38 @@
 # DPF Sentinel for Android: privacy policy
 
-Last updated: 2026-11-11
+Last updated: 2026-11-26
 
 DPF Sentinel is a read-only OBD-II logger for a diesel particulate filter. This policy covers the
-Android app (`com.dpfsentinel`).
+Android app (`com.dpfsentinel`), whether installed from Google Play or from the APK on GitHub.
+
+## In short
+
+- **The developer collects nothing.** The app has no account, no analytics, no ads and no server of
+  the developer's. Nobody but you can see your data.
+- **Your data stays on your phone.** Everything the app records is stored there, for you.
+- **It only leaves the phone when you send it somewhere yourself:** by sharing a log file, or by
+  setting up your own Telegram bot.
+
+The rest of this page gives the detail.
 
 ## What the app reads
 
 **From the car.** Engine and exhaust values (soot level, pressures, temperatures, engine speed, road
 speed, mileage and similar) from a Bluetooth ELM327 adapter plugged into your own car.
 
+**From the phone's Bluetooth.**
+- The name and Bluetooth address of the OBD adapter, to find it again on the next drive.
+- The list of Bluetooth devices already paired with the phone, only when you tap *Choose* under
+  *Car Bluetooth* in Settings, so you can pick which one is the car. Only the one you pick is kept.
+- When the phone connects to a Bluetooth device, Android tells the app which device it is. The app
+  compares it with the car you picked and ignores every other device.
+
 **From the phone, while it is logging and only if you allow the Location permission.**
 - Precise location from GPS. It is used for GPS speed, altitude and road grade.
 - The barometer (air pressure sensor), if the phone has one, to steady the altitude. The barometer
   needs no permission; it is only read while logging.
+
+When logging starts by itself (see below), GPS is not used until you open the app.
 
 If you refuse the Location permission, none of the GPS values are read and logging works without
 them. (On Android 11 and older, Android itself requires the Location permission before any app may
@@ -21,6 +40,18 @@ scan for a Bluetooth LE adapter, so there the app cannot find the adapter withou
 
 The app reads nothing else: no contacts, accounts, advertising id, microphone, camera or files of
 other apps.
+
+## When the app runs
+
+Logging runs as a foreground service, with a notification shown for as long as it runs. It starts:
+
+- when you press Start, or open the app on the phone or on the Android Auto screen;
+- **by itself, if you set up *Automatic logging* in Settings**: when the phone connects to the car's
+  Bluetooth, when the linked OBD adapter comes into range, and at the daily time if you set one.
+
+It stops by itself when the car is switched off or the adapter cannot be reached. After a restart of
+the phone or an update of the app, the app runs briefly to set these triggers up again; that does not
+start logging. To turn automatic logging off, switch off *Automatic logging* in Settings.
 
 ## What is stored, and where
 
@@ -33,8 +64,9 @@ drive:
 - **your position (latitude and longitude) only if you turn on "Log position" in Settings.** It is
   off unless you turn it on. With it on, a log shows where you drove.
 
-Your settings, including a Telegram bot token and chat id if you enter them, are stored on the phone
-in the app's private settings. The app is excluded from Android's cloud backup.
+Your settings are stored on the phone in the app's private settings. They include the adapter's and
+the car's Bluetooth name and address, the last readings, alerts waiting to be sent, and a Telegram
+bot token and chat id if you enter them. The app is excluded from Android's cloud backup.
 
 ## What leaves the phone
 
@@ -50,14 +82,25 @@ in the app's private settings. The app is excluded from Android's cloud backup.
   The app also asks Telegram for messages sent to your bot, so it can answer `/status`.
   Nothing is sent to Telegram until you set this up, and it stops when you clear the token or chat id.
   What Telegram does with it is covered by Telegram's own privacy policy.
+- **Spoken alerts** (on unless you turn them off in Settings). The alert text, such as "filter
+  cleaning finished", is passed to the text-to-speech engine installed on your phone. What that engine
+  does with it is up to its maker.
+- **The Ko-fi button** in Settings opens a web page in your browser. The app sends nothing with it.
 
 ## Permissions
 
-- Nearby devices / Bluetooth: to find and talk to the OBD adapter.
+- Nearby devices / Bluetooth: to find and talk to the OBD adapter, and to notice the car's Bluetooth.
 - Location (precise): GPS speed, altitude and road grade while logging, and position if you turn
   "Log position" on. Optional on Android 12 and newer; required by Android for Bluetooth scanning on
   Android 11 and older. Used only while the app is logging, which shows a notification throughout.
+  The app never asks for background ("all the time") location.
 - Notifications: the logging notification, regeneration and high-soot alerts.
+- Foreground service (connected device, location): keeps logging running with the screen off.
+- Companion device (watch for the linked adapter, start and run in the background): lets Android wake
+  the app when the adapter you linked comes into range. Only used if you link the adapter.
+- Run at startup: sets the automatic-logging triggers up again after a restart. It does not start logging.
+- Alarms & reminders (exact alarms): the daily "look for the car" time, if you set one.
+- Prevent the phone from sleeping: keeps reading the car while the screen is off.
 - Internet: only for Telegram, if you set it up.
 
 ## Deleting data
@@ -68,6 +111,14 @@ in the app's private settings. The app is excluded from Android's cloud backup.
   them; delete them in Telegram (delete the messages or the chat).
 - To stop location being read, turn off the Location permission for the app in Android's settings.
 
+## Google Play testers
+
+If you asked to join the Google Play test, the email address you gave is used only to add you to
+the tester list in Google Play, as Google requires. It is not used for anything else or passed to
+anyone else, and it is removed from the list when you ask or when the test ends.
+
 ## Contact
 
-Questions or requests: open an issue at https://github.com/vitorhpsousa/DPFSentinel-Android/issues
+Questions or requests: open an issue at https://github.com/vitorhpsousa/DPFSentinel-Android/issues.
+Issues are public. For anything you would rather not post in public, use the developer email shown
+on the app's Google Play page.
